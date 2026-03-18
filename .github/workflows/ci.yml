@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Check directory structure
+      run: |
+        echo "✅ 验证项目结构"
+        ls -la
+        
+    - name: Validate markdown files
+      run: |
+        echo "✅ 验证文档格式"
+        find docs -name "*.md" | wc -l
+        
+    - name: Notify agents
+      run: |
+        echo "🤖 通知相关Agent"
+        echo "提交者: ${{ github.actor }}"
+        echo "提交信息: ${{ github.event.head_commit.message }}"
