@@ -10,11 +10,12 @@ import dashboardRoutes from './routes/dashboard';
 import syncRoutes from './routes/sync';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
+import cronService from './services/cronService';
 
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
+export const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
@@ -31,7 +32,11 @@ app.use('/api/sync', syncRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+  });
 });
 
 // Error handling
@@ -42,8 +47,12 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+// 启动服务器
 app.listen(PORT, () => {
   logger.info(`AICTO API server running on port ${PORT}`);
+  
+  // 启动定时任务
+  cronService.startCronJobs();
 });
 
-export { prisma };
+export default app;
