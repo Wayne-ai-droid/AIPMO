@@ -5,16 +5,20 @@ import { logger } from '../utils/logger';
 
 const router = Router();
 
+// 项目ID配置
+const DEFAULT_PROJECT_ID = 'e55139fd2a036662c391e0181b';
+
 // POST /api/sync/projects - 同步所有项目数据
 router.post('/projects', async (req, res, next) => {
   try {
     const { projectIds } = req.body;
     
-    // 如果没有指定项目ID，则同步所有配置的项目
-    const projectsToSync = projectIds || (await prisma.project.findMany({
-      where: { status: 'active' },
-      select: { id: true, yunxiaoProjectId: true, name: true }
-    }));
+    // 如果没有指定项目ID，使用默认项目
+    const projectsToSync = projectIds || [{ 
+      id: 1, 
+      yunxiaoProjectId: DEFAULT_PROJECT_ID,
+      name: 'MFP项目'
+    }];
 
     const results = [];
     
@@ -39,54 +43,26 @@ router.post('/projects', async (req, res, next) => {
         // 从云效获取数据
         const yunxiaoData = await yunxiaoService.syncProjectData(project.yunxiaoProjectId);
 
-        // 保存需求数据
-        for (const demand of yunxiaoData.demands) {
-          await prisma.demand.upsert({
-            where: { yunxiaoId: demand.id },
+        // 保存冲刺数据到数据库（使用Iteration模型）
+        for (const sprint of yunxiaoData.sprints) {
+          await prisma.iteration.upsert({
+            where: { yunxiaoId: sprint.id },
             update: {
-              title: demand.title,
-              status: mapStatus(demand.status),
-              priority: demand.priority,
-              assignee: demand.assignee?.name,
-              progress: calculateProgress(demand.status),
+              name: sprint.name,
+              status: mapStatus(sprint.status),
+              startDate: new Date(sprint.startDate),
+              endDate: new Date(sprint.endDate),
+              owner: sprint.owners?.[0]?.name || sprint.creator?.name,
               updatedAt: new Date(),
-              rawData: demand,
             },
             create: {
               projectId: project.id,
-              yunxiaoId: demand.id,
-              title: demand.title,
-              status: mapStatus(demand.status),
-              priority: demand.priority,
-              assignee: demand.assignee?.name,
-              progress: calculateProgress(demand.status),
-              rawData: demand,
-            },
-          });
-        }
-
-        // 保存缺陷数据
-        for (const bug of yunxiaoData.bugs) {
-          await prisma.bug.upsert({
-            where: { yunxiaoId: bug.id },
-            update: {
-              title: bug.title,
-              status: mapBugStatus(bug.status),
-              severity: bug.severity,
-              priority: bug.priority,
-              assignee: bug.assignee?.name,
-              updatedAt: new Date(),
-              rawData: bug,
-            },
-            create: {
-              projectId: project.id,
-              yunxiaoId: bug.id,
-              title: bug.title,
-              status: mapBugStatus(bug.status),
-              severity: bug.severity,
-              priority: bug.priority,
-              assignee: bug.assignee?.name,
-              rawData: bug,
+              yunxiaoId: sprint.id,
+              name: sprint.name,
+              status: mapStatus(sprint.status),
+              startDate: new Date(sprint.startDate),
+              endDate: new Date(sprint.endDate),
+              owner: sprint.owners?.[0]?.name || sprint.creator?.name,
             },
           });
         }
@@ -96,7 +72,7 @@ router.post('/projects', async (req, res, next) => {
           where: { id: syncLog.id },
           data: {
             status: 'success',
-            recordCount: yunxiaoData.demands.length + yunxiaoData.bugs.length,
+            recordCount: yunxiaoData.sprints.length + yunxiaoData.members.length,
             completedAt: new Date(),
           }
         });
@@ -105,8 +81,8 @@ router.post('/projects', async (req, res, next) => {
           projectId: project.id,
           name: project.name,
           status: 'success',
-          demands: yunxiaoData.demands.length,
-          bugs: yunxiaoData.bugs.length,
+          sprints: yunxiaoData.sprints.length,
+          members: yunxiaoData.members.length,
         });
 
       } catch (error) {
@@ -150,16 +126,9 @@ router.post('/projects', async (req, res, next) => {
 // POST /api/sync/project/:id - 同步单个项目
 router.post('/project/:id', async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const project = await prisma.project.findUnique({
-      where: { id: parseInt(id) }
-    });
-
-    if (!project || !project.yunxiaoProjectId) {
-      return res.status(400).json({ error: 'Project not found or no yunxiaoProjectId' });
-    }
-
-    const result = await yunxiaoService.syncProjectData(project.yunxiaoProjectId);
+    const projectId = req.params.id === 'default' ? DEFAULT_PROJECT_ID : req.params.id;
+    
+    const result = await yunxiaoService.syncProjectData(projectId);
 
     res.json({
       success: true,
