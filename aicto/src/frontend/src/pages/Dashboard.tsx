@@ -1,18 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, List, Tag, Progress, Badge, Spin, message } from 'antd';
-import { ProjectOutlined, CheckCircleOutlined, BugOutlined, WarningOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { Card, Row, Col, Statistic, List, Tag, Select, Spin, message, Button } from 'antd';
+import { ProjectOutlined, CheckCircleOutlined, BugOutlined, WarningOutlined, EyeOutlined } from '@ant-design/icons';
 
-// API配置
+const { Option } = Select;
 const API_BASE_URL = 'http://localhost:3001/api';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [syncData, setSyncData] = useState<any>(null);
+  const [selectedProject, setSelectedProject] = useState<string>('default');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 调用后端API获取真实数据
-    fetch(`${API_BASE_URL}/sync/project/default`)
+    fetchProjectData(selectedProject);
+  }, [selectedProject]);
+
+  const fetchProjectData = (projectId: string) => {
+    setLoading(true);
+    fetch(`${API_BASE_URL}/sync/project/${projectId}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -28,7 +35,7 @@ const Dashboard: React.FC = () => {
         setLoading(false);
         message.error('连接后端服务失败');
       });
-  }, []);
+  };
 
   // 计算统计数据
   const stats = syncData ? {
@@ -43,12 +50,6 @@ const Dashboard: React.FC = () => {
     todoSprints: 0,
   };
 
-  const getHealthColor = (score: number) => {
-    if (score >= 80) return '#52c41a';
-    if (score >= 60) return '#faad14';
-    return '#f5222d';
-  };
-
   const getStatusTag = (status: string) => {
     const statusMap: Record<string, { text: string; color: string }> = {
       'TODO': { text: '待开始', color: 'default' },
@@ -58,6 +59,11 @@ const Dashboard: React.FC = () => {
     };
     return statusMap[status] || { text: status, color: 'default' };
   };
+
+  // 项目选项（目前只有MFP项目）
+  const projectOptions = [
+    { value: 'default', label: 'MFP项目' },
+  ];
 
   if (error) {
     return (
@@ -73,10 +79,26 @@ const Dashboard: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <h1 style={{ marginBottom: '24px' }}>
-        AICTO Dashboard
-        <Tag color="green" style={{ marginLeft: 12 }}>真实数据</Tag>
-      </h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1 style={{ margin: 0 }}>
+          AICTO Dashboard
+          <Tag color="green" style={{ marginLeft: 12 }}>真实数据</Tag>
+        </h1>
+        
+        <div>
+          <span style={{ marginRight: 8 }}>选择项目:</span>
+          <Select
+            value={selectedProject}
+            onChange={setSelectedProject}
+            style={{ width: 200 }}
+            loading={loading}
+          >
+            {projectOptions.map(opt => (
+              <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+            ))}
+          </Select>
+        </div>
+      </div>
       
       {/* 统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
@@ -124,7 +146,19 @@ const Dashboard: React.FC = () => {
       </Row>
 
       {/* 冲刺列表 */}
-      <Card title="冲刺列表" loading={loading}>
+      <Card 
+        title="冲刺列表" 
+        loading={loading}
+        extra={
+          <Button 
+            type="primary" 
+            icon={<EyeOutlined />}
+            onClick={() => navigate('/projects/1')}
+          >
+            查看项目详情
+          </Button>
+        }
+      >
         <List
           itemLayout="horizontal"
           dataSource={syncData?.sprints || []}

@@ -1,242 +1,179 @@
-import React, { useState } from 'react';
-import { Card, Tabs, Table, Tag, Progress, Statistic, Row, Col, Badge } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Card, Table, Tag, List, Button, Spin, message, Statistic, Row, Col } from 'antd';
+import { ArrowLeftOutlined, ProjectOutlined, TeamOutlined, CalendarOutlined } from '@ant-design/icons';
 
-// 模拟项目详情数据
-const mockProjectDetail = {
-  id: 1,
-  name: '电商中台重构',
-  healthScore: 85,
-  status: 'excellent',
-  description: '电商平台核心系统重构项目，包括订单、库存、支付等模块',
-  manager: '张三',
-  startDate: '2026-01-15',
-  endDate: '2026-04-30',
-  progress: 80,
-  stats: {
-    demands: { total: 45, done: 36, doing: 9, todo: 0 },
-    bugs: { total: 12, closed: 9, new: 2, fixing: 1 },
-    members: 8
-  }
-};
-
-// 模拟需求数据
-const mockDemands = [
-  { id: 1001, title: '订单管理模块重构', status: 'done', priority: 'P0', assignee: '张三', progress: 100 },
-  { id: 1002, title: '库存系统优化', status: 'done', priority: 'P0', assignee: '李四', progress: 100 },
-  { id: 1003, title: '支付接口升级', status: 'doing', priority: 'P0', assignee: '王五', progress: 75 },
-  { id: 1004, title: '用户中心改造', status: 'doing', priority: 'P1', assignee: '赵六', progress: 60 },
-  { id: 1005, title: '数据统计报表', status: 'doing', priority: 'P1', assignee: '钱七', progress: 40 },
-  { id: 1006, title: '消息通知系统', status: 'todo', priority: 'P2', assignee: '孙八', progress: 0 },
-];
-
-// 模拟缺陷数据
-const mockBugs = [
-  { id: 2001, title: '订单提交后页面卡顿', severity: 'serious', status: 'fixing', assignee: '张三', createdAt: '2026-03-15' },
-  { id: 2002, title: '库存数量显示不正确', severity: 'normal', status: 'new', assignee: '李四', createdAt: '2026-03-18' },
-  { id: 2003, title: '支付回调偶尔失败', severity: 'fatal', status: 'closed', assignee: '王五', createdAt: '2026-03-10' },
-];
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const ProjectDetail: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [syncData, setSyncData] = useState<any>(null);
+
+  useEffect(() => {
+    // 调用后端API获取真实数据
+    fetch(`${API_BASE_URL}/sync/project/${id || 'default'}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setSyncData(data.data);
+          setLoading(false);
+        } else {
+          message.error('获取数据失败');
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        message.error('连接后端服务失败');
+        setLoading(false);
+      });
+  }, [id]);
 
   const getStatusTag = (status: string) => {
-    const statusMap: Record<string, { color: string; text: string }> = {
-      'done': { color: 'success', text: '已完成' },
-      'doing': { color: 'processing', text: '进行中' },
-      'todo': { color: 'default', text: '待处理' },
-      'closed': { color: 'success', text: '已关闭' },
-      'new': { color: 'error', text: '新建' },
-      'fixing': { color: 'warning', text: '修复中' },
+    const statusMap: Record<string, { text: string; color: string }> = {
+      'TODO': { text: '待开始', color: 'default' },
+      'DOING': { text: '进行中', color: 'processing' },
+      'DONE': { text: '已完成', color: 'success' },
+      'ARCHIVED': { text: '已归档', color: 'default' },
     };
-    const config = statusMap[status] || { color: 'default', text: status };
-    return <Tag color={config.color}>{config.text}</Tag>;
+    return statusMap[status] || { text: status, color: 'default' };
   };
 
-  const getPriorityTag = (priority: string) => {
-    const colorMap: Record<string, string> = {
-      'P0': 'red',
-      'P1': 'orange',
-      'P2': 'blue',
-      'P3': 'green',
-    };
-    return <Tag color={colorMap[priority] || 'default'}>{priority}</Tag>;
-  };
-
-  const getSeverityTag = (severity: string) => {
-    const severityMap: Record<string, { color: string; text: string }> = {
-      'fatal': { color: 'red', text: '致命' },
-      'serious': { color: 'orange', text: '严重' },
-      'normal': { color: 'blue', text: '一般' },
-      'tip': { color: 'green', text: '提示' },
-    };
-    const config = severityMap[severity] || { color: 'default', text: severity };
-    return <Tag color={config.color}>{config.text}</Tag>;
-  };
-
-  const demandColumns: ColumnsType<any> = [
-    { title: 'ID', dataIndex: 'id', width: 80 },
-    { title: '标题', dataIndex: 'title', ellipsis: true },
-    { 
-      title: '状态', 
-      dataIndex: 'status', 
-      width: 100,
-      render: (status) => getStatusTag(status)
+  const sprintColumns = [
+    {
+      title: '冲刺名称',
+      dataIndex: 'name',
+      key: 'name',
     },
-    { 
-      title: '优先级', 
-      dataIndex: 'priority', 
-      width: 80,
-      render: (priority) => getPriorityTag(priority)
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => {
+        const s = getStatusTag(status);
+        return <Tag color={s.color}>{s.text}</Tag>;
+      }
     },
-    { title: '负责人', dataIndex: 'assignee', width: 100 },
-    { 
-      title: '进度', 
-      dataIndex: 'progress', 
-      width: 120,
-      render: (progress) => <Progress percent={progress} size="small" />
+    {
+      title: '开始日期',
+      dataIndex: 'startDate',
+      key: 'startDate',
+      render: (date: number) => new Date(date).toLocaleDateString(),
+    },
+    {
+      title: '结束日期',
+      dataIndex: 'endDate',
+      key: 'endDate',
+      render: (date: number) => new Date(date).toLocaleDateString(),
+    },
+    {
+      title: '负责人',
+      dataIndex: 'owners',
+      key: 'owners',
+      render: (owners: any[]) => owners?.[0]?.name || 'N/A',
     },
   ];
 
-  const bugColumns: ColumnsType<any> = [
-    { title: 'ID', dataIndex: 'id', width: 80 },
-    { title: '标题', dataIndex: 'title', ellipsis: true },
-    { 
-      title: '严重程度', 
-      dataIndex: 'severity', 
-      width: 100,
-      render: (severity) => getSeverityTag(severity)
-    },
-    { 
-      title: '状态', 
-      dataIndex: 'status', 
-      width: 100,
-      render: (status) => getStatusTag(status)
-    },
-    { title: '负责人', dataIndex: 'assignee', width: 100 },
-    { title: '创建时间', dataIndex: 'createdAt', width: 120 },
-  ];
-
-  const items = [
-    {
-      key: 'overview',
-      label: '项目概览',
-      children: (
-        <div>
-          <Card title="基本信息" style={{ marginBottom: 24 }}>
-            <Row gutter={24}>
-              <Col span={16}>
-                <p><strong>项目名称：</strong>{mockProjectDetail.name}</p>
-                <p><strong>项目描述：</strong>{mockProjectDetail.description}</p>
-                <p><strong>项目经理：</strong>{mockProjectDetail.manager}</p>
-                <p><strong>项目周期：</strong>{mockProjectDetail.startDate} ~ {mockProjectDetail.endDate}</p>
-              </Col>
-              <Col span={8}>
-                <div style={{ textAlign: 'center' }}>
-                  <Progress 
-                    type="circle" 
-                    percent={mockProjectDetail.healthScore}
-                    strokeColor={mockProjectDetail.healthScore >= 80 ? '#52c41a' : mockProjectDetail.healthScore >= 60 ? '#faad14' : '#f5222d'}
-                    size={120}
-                  />
-                  <p style={{ marginTop: 12 }}>健康度评分</p>
-                </div>
-              </Col>
-            </Row>
-          </Card>
-
-          <Row gutter={16}>
-            <Col span={8}>
-              <Card>
-                <Statistic 
-                  title="总需求" 
-                  value={mockProjectDetail.stats.demands.total}
-                  suffix={`/ 已完成 ${mockProjectDetail.stats.demands.done}`}
-                />
-                <Progress 
-                  percent={Math.round((mockProjectDetail.stats.demands.done / mockProjectDetail.stats.demands.total) * 100)}
-                  status="active"
-                />
-              </Card>
-            </Col>
-            <Col span={8}>
-              <Card>
-                <Statistic 
-                  title="缺陷统计" 
-                  value={mockProjectDetail.stats.bugs.total}
-                  suffix={`/ 已修复 ${mockProjectDetail.stats.bugs.closed}`}
-                />
-                <Progress 
-                  percent={Math.round((mockProjectDetail.stats.bugs.closed / mockProjectDetail.stats.bugs.total) * 100)}
-                  status="active"
-                />
-              </Card>
-            </Col>
-            <Col span={8}>
-              <Card>
-                <Statistic title="团队成员" value={mockProjectDetail.stats.members} suffix="人" />
-              </Card>
-            </Col>
-          </Row>
-        </div>
-      ),
-    },
-    {
-      key: 'demands',
-      label: '需求列表',
-      children: (
-        <Table 
-          columns={demandColumns} 
-          dataSource={mockDemands}
-          rowKey="id"
-          pagination={{ pageSize: 10 }}
-        />
-      ),
-    },
-    {
-      key: 'bugs',
-      label: '缺陷列表',
-      children: (
-        <div>
-          {mockBugs.some(b => b.severity === 'fatal' || b.severity === 'serious') && (
-            <Card style={{ marginBottom: 16, borderColor: '#ff4d4f' }}>
-              <Badge status="error" text="高风险缺陷" />
-              <p style={{ marginTop: 8, color: '#ff4d4f' }}>
-                存在 {mockBugs.filter(b => b.severity === 'fatal').length} 个致命缺陷，
-                {mockBugs.filter(b => b.severity === 'serious').length} 个严重缺陷需要优先处理
-              </p>
-            </Card>
-          )}
-          <Table 
-            columns={bugColumns} 
-            dataSource={mockBugs}
-            rowKey="id"
-            pagination={{ pageSize: 10 }}
-          />
-        </div>
-      ),
-    },
-    {
-      key: 'settings',
-      label: '项目配置',
-      children: (
-        <Card title="项目配置">
-          <p>配置功能开发中...</p>
-        </Card>
-      ),
-    },
-  ];
+  const stats = syncData ? {
+    totalSprints: syncData.sprints?.length || 0,
+    totalMembers: syncData.members?.length || 0,
+    activeSprints: syncData.sprints?.filter((s: any) => s.status === 'DOING').length || 0,
+    completedSprints: syncData.sprints?.filter((s: any) => s.status === 'DONE' || s.status === 'ARCHIVED').length || 0,
+  } : { totalSprints: 0, totalMembers: 0, activeSprints: 0, completedSprints: 0 };
 
   return (
     <div style={{ padding: 24 }}>
-      <h1>{mockProjectDetail.name}</h1>
-      <p style={{ color: '#666', marginBottom: 24 }}>{mockProjectDetail.description}</p>
-      
-      <Tabs 
-        activeKey={activeTab} 
-        onChange={setActiveTab}
-        items={items}
-      />
+      <Button 
+        icon={<ArrowLeftOutlined />} 
+        onClick={() => navigate('/projects')}
+        style={{ marginBottom: 16 }}
+      >
+        返回项目列表
+      </Button>
+
+      <h1 style={{ marginBottom: 24 }}>
+        <ProjectOutlined style={{ marginRight: 8 }} />
+        MFP项目详情
+        <Tag color="green" style={{ marginLeft: 12 }}>真实数据</Tag>
+      </h1>
+
+      {/* 统计卡片 */}
+      <Row gutter={16} style={{ marginBottom: 24 }}>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="总冲刺数"
+              value={stats.totalSprints}
+              prefix={<CalendarOutlined />}
+              loading={loading}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="项目成员"
+              value={stats.totalMembers}
+              prefix={<TeamOutlined />}
+              loading={loading}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="进行中"
+              value={stats.activeSprints}
+              valueStyle={{ color: '#1890ff' }}
+              loading={loading}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card>
+            <Statistic
+              title="已完成"
+              value={stats.completedSprints}
+              valueStyle={{ color: '#52c41a' }}
+              loading={loading}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 冲刺列表 */}
+      <Card title="冲刺列表" loading={loading} style={{ marginBottom: 24 }}>
+        <Table
+          columns={sprintColumns}
+          dataSource={syncData?.sprints || []}
+          rowKey="id"
+          pagination={{ pageSize: 10 }}
+        />
+      </Card>
+
+      {/* 成员列表 */}
+      <Card title="项目成员" loading={loading}>
+        <List
+          grid={{ gutter: 16, column: 6 }}
+          dataSource={syncData?.members || []}
+          renderItem={(member: any) => (
+            <List.Item>
+              <Card size="small">
+                <div style={{ textAlign: 'center' }}>
+                  <img
+                    src={member.userAvatar || 'https://via.placeholder.com/40'}
+                    alt={member.userName}
+                    style={{ width: 40, height: 40, borderRadius: '50%', marginBottom: 8 }}
+                  />
+                  <div style={{ fontSize: 12, fontWeight: 500 }}>{member.userName}</div>
+                  <Tag size="small" style={{ marginTop: 4, fontSize: 10 }}>{member.roleName}</Tag>
+                </div>
+              </Card>
+            </List.Item>
+          )}
+        />
+      </Card>
     </div>
   );
 };

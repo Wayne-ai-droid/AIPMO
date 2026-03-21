@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Badge, Spin, message } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Table, Tag, Badge, Spin, message, Button } from 'antd';
+import { EyeOutlined } from '@ant-design/icons';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
 const Projects: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [syncData, setSyncData] = useState<any>(null);
 
@@ -31,6 +34,7 @@ const Projects: React.FC = () => {
     {
       id: 1,
       name: 'MFP项目',
+      yunxiaoProjectId: syncData.projectId,
       healthScore: 85,
       status: 'active',
       sprints: syncData.sprints.length,
@@ -45,6 +49,28 @@ const Projects: React.FC = () => {
       title: '项目名称',
       dataIndex: 'name',
       key: 'name',
+      render: (text: string, record: any) => (
+        <a 
+          href="#" 
+          onClick={(e) => {
+            e.preventDefault();
+            navigate(`/projects/${record.id}`);
+          }}
+          style={{ fontWeight: 500, fontSize: 14 }}
+        >
+          {text}
+        </a>
+      ),
+    },
+    {
+      title: '云效项目ID',
+      dataIndex: 'yunxiaoProjectId',
+      key: 'yunxiaoProjectId',
+      render: (text: string) => (
+        <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>
+          {text?.substring(0, 16)}...
+        </code>
+      ),
     },
     {
       title: '健康度',
@@ -94,7 +120,16 @@ const Projects: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: () => <a href="#">查看</a>,
+      render: (_: any, record: any) => (
+        <Button 
+          type="primary" 
+          size="small" 
+          icon={<EyeOutlined />}
+          onClick={() => navigate(`/projects/${record.id}`)}
+        >
+          查看详情
+        </Button>
+      ),
     },
   ];
 
