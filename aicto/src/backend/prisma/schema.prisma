@@ -3,26 +3,25 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model Project {
   id                Int       @id @default(autoincrement())
-  name              String    @db.VarChar(100)
-  yunxiaoProjectId  String?   @db.VarChar(50) @map("yunxiao_project_id")
-  feishuChatId      String?   @db.VarChar(100) @map("feishu_chat_id")
-  githubRepo        String?   @db.VarChar(200) @map("github_repo")
-  status            String    @default("active") @db.VarChar(20)
+  name              String
+  yunxiaoProjectId  String?   @map("yunxiao_project_id")
+  feishuChatId      String?   @map("feishu_chat_id")
+  githubRepo        String?   @map("github_repo")
+  status            String    @default("active")
   healthScore       Int       @default(100) @map("health_score")
-  config            Json      @default("{}")
+  config            String    @default("{}")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   demands   Demand[]
   bugs      Bug[]
-  metrics   Metric[]
-  alertRules AlertRule[]
+  iterations Iteration[]
   syncLogs  SyncLog[]
 
   @@map("projects")
@@ -31,18 +30,18 @@ model Project {
 model Demand {
   id            Int       @id @default(autoincrement())
   projectId     Int       @map("project_id")
-  yunxiaoId     String?   @db.VarChar(50) @map("yunxiao_id")
-  title         String    @db.VarChar(500)
-  status        String    @db.VarChar(20)
-  priority      String?   @db.VarChar(10)
-  assignee      String?   @db.VarChar(100)
+  yunxiaoId     String?   @map("yunxiao_id")
+  title         String
+  status        String
+  priority      String?
+  assignee      String?
   plannedStart  DateTime? @map("planned_start")
   plannedEnd    DateTime? @map("planned_end")
   actualStart   DateTime? @map("actual_start")
   actualEnd     DateTime? @map("actual_end")
   storyPoints   Int?      @map("story_points")
   progress      Int       @default(0)
-  rawData       Json?     @map("raw_data")
+  rawData       String?   @map("raw_data")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -54,61 +53,47 @@ model Demand {
 model Bug {
   id            Int       @id @default(autoincrement())
   projectId     Int       @map("project_id")
-  yunxiaoId     String?   @db.VarChar(50) @map("yunxiao_id")
-  title         String    @db.VarChar(500)
-  status        String    @db.VarChar(20)
-  severity      String?   @db.VarChar(20)
-  priority      String?   @db.VarChar(10)
-  reporter      String?   @db.VarChar(100)
-  assignee      String?   @db.VarChar(100)
-  foundVersion  String?   @db.VarChar(50) @map("found_version")
-  fixedVersion  String?   @db.VarChar(50) @map("fixed_version")
+  yunxiaoId     String?   @map("yunxiao_id")
+  title         String
+  status        String
+  severity      String?
+  priority      String?
+  reporter      String?
+  assignee      String?
+  foundVersion  String?   @map("found_version")
+  fixedVersion  String?   @map("fixed_version")
   createdAt     DateTime  @default(now()) @map("created_at")
   resolvedAt    DateTime? @map("resolved_at")
-  rawData       Json?     @map("raw_data")
+  rawData       String?   @map("raw_data")
 
   project Project @relation(fields: [projectId], references: [id])
 
   @@map("bugs")
 }
 
-model Metric {
-  id          Int       @id @default(autoincrement())
-  projectId   Int       @map("project_id")
-  name        String    @db.VarChar(100)
-  type        String    @db.VarChar(20)
-  formula     String?
-  unit        String?   @db.VarChar(20)
-  thresholds  Json?
-  enabled     Boolean   @default(true)
-  createdAt   DateTime  @default(now()) @map("created_at")
+model Iteration {
+  id            Int       @id @default(autoincrement())
+  projectId     Int       @map("project_id")
+  yunxiaoId     String?   @map("yunxiao_id")
+  name          String
+  status        String
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+  owner         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   project Project @relation(fields: [projectId], references: [id])
 
-  @@map("metrics")
-}
-
-model AlertRule {
-  id              Int       @id @default(autoincrement())
-  projectId       Int       @map("project_id")
-  name            String    @db.VarChar(100)
-  condition       Json
-  notifyChannels  Json      @map("notify_channels")
-  notifyTargets   Json      @map("notify_targets")
-  enabled         Boolean   @default(true)
-  createdAt       DateTime  @default(now()) @map("created_at")
-
-  project Project @relation(fields: [projectId], references: [id])
-
-  @@map("alert_rules")
+  @@map("iterations")
 }
 
 model SyncLog {
   id            Int       @id @default(autoincrement())
   projectId     Int       @map("project_id")
-  source        String    @db.VarChar(20)
-  syncType      String    @db.VarChar(20) @map("sync_type")
-  status        String    @db.VarChar(20)
+  source        String
+  syncType      String    @map("sync_type")
+  status        String
   recordCount   Int?      @map("record_count")
   errorMessage  String?   @map("error_message")
   startedAt     DateTime  @map("started_at")
