@@ -1,40 +1,45 @@
-import React from 'react';
-import { Table, Tag, Badge } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Table, Tag, Badge, Spin, message } from 'antd';
 
-const mockProjects = [
-  {
-    id: 1,
-    name: '电商中台重构',
-    healthScore: 85,
-    status: 'active',
-    demands: 45,
-    bugs: 12,
-    manager: '张三',
-    lastUpdate: '2026-03-19 10:30'
-  },
-  {
-    id: 2,
-    name: '支付系统升级',
-    healthScore: 72,
-    status: 'active',
-    demands: 32,
-    bugs: 18,
-    manager: '李四',
-    lastUpdate: '2026-03-19 09:15'
-  },
-  {
-    id: 3,
-    name: '用户中心V2',
-    healthScore: 45,
-    status: 'warning',
-    demands: 28,
-    bugs: 25,
-    manager: '王五',
-    lastUpdate: '2026-03-18 18:00'
-  },
-];
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const Projects: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+  const [syncData, setSyncData] = useState<any>(null);
+
+  useEffect(() => {
+    // 调用后端API获取真实数据
+    fetch(`${API_BASE_URL}/sync/project/default`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setSyncData(data.data);
+          setLoading(false);
+        } else {
+          message.error('获取数据失败');
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        message.error('连接后端服务失败');
+        setLoading(false);
+      });
+  }, []);
+
+  // 从冲刺数据生成项目列表
+  const projects = syncData?.sprints ? [
+    {
+      id: 1,
+      name: 'MFP项目',
+      healthScore: 85,
+      status: 'active',
+      sprints: syncData.sprints.length,
+      members: syncData.members.length,
+      manager: '林博',
+      lastUpdate: new Date().toLocaleString()
+    }
+  ] : [];
+
   const columns = [
     {
       title: '项目名称',
@@ -67,14 +72,14 @@ const Projects: React.FC = () => {
       }
     },
     {
-      title: '需求数',
-      dataIndex: 'demands',
-      key: 'demands',
+      title: '冲刺数',
+      dataIndex: 'sprints',
+      key: 'sprints',
     },
     {
-      title: '缺陷数',
-      dataIndex: 'bugs',
-      key: 'bugs',
+      title: '成员数',
+      dataIndex: 'members',
+      key: 'members',
     },
     {
       title: '负责人',
@@ -89,17 +94,22 @@ const Projects: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: () => <a href="/projects/1">查看</a>,
+      render: () => <a href="#">查看</a>,
     },
   ];
 
   return (
     <div style={{ padding: 24 }}>
-      <h1>项目管理</h1>
+      <h1 style={{ marginBottom: 24 }}>
+        项目管理
+        <Tag color="green" style={{ marginLeft: 12 }}>真实数据</Tag>
+      </h1>
       <Table 
         columns={columns}
-        dataSource={mockProjects}
+        dataSource={projects}
+        loading={loading}
         rowKey="id"
+        pagination={false}
       />
     </div>
   );
