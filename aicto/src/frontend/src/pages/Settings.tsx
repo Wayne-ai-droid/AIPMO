@@ -179,7 +179,7 @@ const Settings: React.FC = () => {
         <div>
           <Tag color="success">优秀 ≥{record.thresholds.green}</Tag>
           <Tag color="warning">良好 ≥{record.thresholds.yellow}</Tag>
-          <Tag color="error">警告 <{record.thresholds.red}</Tag>
+          <Tag color="error">警告 &lt;{record.thresholds.red}</Tag>
         </div>
       )
     },
