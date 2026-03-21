@@ -1,79 +1,47 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Row, Col, Statistic, List, Tag, Progress, Badge, Spin } from 'antd';
+import { Card, Row, Col, Statistic, List, Tag, Progress, Badge, Spin, message } from 'antd';
 import { ProjectOutlined, CheckCircleOutlined, BugOutlined, WarningOutlined } from '@ant-design/icons';
 
-// 模拟数据
-const mockData = {
-  stats: {
-    totalProjects: 5,
-    totalDemands: 128,
-    pendingBugs: 23,
-    riskProjects: 1
-  },
-  projects: [
-    {
-      id: 1,
-      name: '电商中台重构',
-      healthScore: 85,
-      status: 'excellent',
-      progress: 80,
-      pendingBugs: 3,
-      demands: { total: 45, done: 36, doing: 9 },
-      bugs: { total: 12, closed: 9, new: 3 }
-    },
-    {
-      id: 2,
-      name: '支付系统升级',
-      healthScore: 72,
-      status: 'good',
-      progress: 65,
-      pendingBugs: 8,
-      demands: { total: 32, done: 20, doing: 12 },
-      bugs: { total: 18, closed: 10, new: 8 }
-    },
-    {
-      id: 3,
-      name: '用户中心V2',
-      healthScore: 45,
-      status: 'warning',
-      progress: 40,
-      pendingBugs: 12,
-      demands: { total: 28, done: 11, doing: 17 },
-      bugs: { total: 25, closed: 13, new: 12 }
-    },
-    {
-      id: 4,
-      name: '数据报表平台',
-      healthScore: 90,
-      status: 'excellent',
-      progress: 95,
-      pendingBugs: 0,
-      demands: { total: 15, done: 14, doing: 1 },
-      bugs: { total: 5, closed: 5, new: 0 }
-    },
-    {
-      id: 5,
-      name: '移动端App',
-      healthScore: 78,
-      status: 'good',
-      progress: 70,
-      pendingBugs: 5,
-      demands: { total: 38, done: 26, doing: 12 },
-      bugs: { total: 15, closed: 10, new: 5 }
-    }
-  ]
-};
+// API配置
+const API_BASE_URL = 'http://localhost:3001/api';
 
 const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(mockData);
+  const [syncData, setSyncData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // 模拟API加载
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
+    // 调用后端API获取真实数据
+    fetch(`${API_BASE_URL}/sync/project/default`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setSyncData(data.data);
+          setLoading(false);
+        } else {
+          setError(data.error || '获取数据失败');
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        setError(err.message);
+        setLoading(false);
+        message.error('连接后端服务失败');
+      });
   }, []);
+
+  // 计算统计数据
+  const stats = syncData ? {
+    totalSprints: syncData.sprints?.length || 0,
+    totalMembers: syncData.members?.length || 0,
+    activeSprints: syncData.sprints?.filter((s: any) => s.status === 'DOING').length || 0,
+    todoSprints: syncData.sprints?.filter((s: any) => s.status === 'TODO').length || 0,
+  } : {
+    totalSprints: 0,
+    totalMembers: 0,
+    activeSprints: 0,
+    todoSprints: 0,
+  };
 
   const getHealthColor = (score: number) => {
     if (score >= 80) return '#52c41a';
@@ -81,21 +49,33 @@ const Dashboard: React.FC = () => {
     return '#f5222d';
   };
 
-  const getHealthStatus = (status: string) => {
-    switch (status) {
-      case 'excellent': return { text: '优秀', color: 'success' };
-      case 'good': return { text: '良好', color: 'processing' };
-      case 'warning': return { text: '警告', color: 'warning' };
-      case 'danger': return { text: '危险', color: 'error' };
-      default: return { text: '未知', color: 'default' };
-    }
+  const getStatusTag = (status: string) => {
+    const statusMap: Record<string, { text: string; color: string }> = {
+      'TODO': { text: '待开始', color: 'default' },
+      'DOING': { text: '进行中', color: 'processing' },
+      'DONE': { text: '已完成', color: 'success' },
+      'ARCHIVED': { text: '已归档', color: 'default' },
+    };
+    return statusMap[status] || { text: status, color: 'default' };
   };
+
+  if (error) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <h1>AICTO Dashboard</h1>
+        <Card>
+          <p style={{ color: 'red' }}>错误: {error}</p>
+          <p>请确保后端服务已启动: http://localhost:3001</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '24px' }}>
       <h1 style={{ marginBottom: '24px' }}>
-        AICTO Dashboard 
-        <Tag color="blue" style={{ marginLeft: 12 }}>模拟数据</Tag>
+        AICTO Dashboard
+        <Tag color="green" style={{ marginLeft: 12 }}>真实数据</Tag>
       </h1>
       
       {/* 统计卡片 */}
@@ -103,8 +83,8 @@ const Dashboard: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="活跃项目"
-              value={data.stats.totalProjects}
+              title="总冲刺数"
+              value={stats.totalSprints}
               prefix={<ProjectOutlined />}
               loading={loading}
             />
@@ -113,8 +93,8 @@ const Dashboard: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="总需求数"
-              value={data.stats.totalDemands}
+              title="项目成员"
+              value={stats.totalMembers}
               prefix={<CheckCircleOutlined />}
               loading={loading}
             />
@@ -123,10 +103,10 @@ const Dashboard: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="待修复缺陷"
-              value={data.stats.pendingBugs}
+              title="进行中冲刺"
+              value={stats.activeSprints}
               prefix={<BugOutlined />}
-              valueStyle={{ color: data.stats.pendingBugs > 20 ? '#cf1322' : '#3f8600' }}
+              valueStyle={{ color: stats.activeSprints > 0 ? '#52c41a' : '#999' }}
               loading={loading}
             />
           </Card>
@@ -134,54 +114,35 @@ const Dashboard: React.FC = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="风险项目"
-              value={data.stats.riskProjects}
+              title="待开始冲刺"
+              value={stats.todoSprints}
               prefix={<WarningOutlined />}
-              valueStyle={{ color: data.stats.riskProjects ? '#cf1322' : '#3f8600' }}
               loading={loading}
             />
           </Card>
         </Col>
       </Row>
 
-      {/* 项目健康度列表 */}
-      <Card title="项目健康度监控" loading={loading} extra={<a href="#">查看全部</a>}>
+      {/* 冲刺列表 */}
+      <Card title="冲刺列表" loading={loading}>
         <List
-          dataSource={data.projects}
-          renderItem={(project) => {
-            const health = getHealthStatus(project.status);
+          itemLayout="horizontal"
+          dataSource={syncData?.sprints || []}
+          renderItem={(sprint: any) => {
+            const status = getStatusTag(sprint.status);
             return (
-              <List.Item
-                actions={[
-                  <a key="detail">查看详情</a>,
-                  <a key="config">配置</a>
-                ]}
-              >
+              <List.Item>
                 <List.Item.Meta
                   title={
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ fontSize: 16, fontWeight: 500 }}>{project.name}</span>
-                      <Tag color={health.color}>{health.text}</Tag>
-                      {project.status === 'warning' && (
-                        <Badge status="error" text="需关注" />
-                      )}
+                      <span>{sprint.name}</span>
+                      <Tag color={status.color}>{status.text}</Tag>
                     </div>
                   }
                   description={
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <Progress
-                          percent={project.healthScore}
-                          strokeColor={getHealthColor(project.healthScore)}
-                          size="small"
-                          style={{ width: 200 }}
-                        />
-                        <span style={{ color: '#666' }}>
-                          进度: {project.progress}% | 
-                          需求: {project.demands.done}/{project.demands.total} | 
-                          缺陷: {project.pendingBugs}个待修复
-                        </span>
-                      </div>
+                    <div>
+                      <p>负责人: {sprint.owners?.[0]?.name || sprint.creator?.name || 'N/A'}</p>
+                      <p>时间: {new Date(sprint.startDate).toLocaleDateString()} ~ {new Date(sprint.endDate).toLocaleDateString()}</p>
                     </div>
                   }
                 />
@@ -191,31 +152,28 @@ const Dashboard: React.FC = () => {
         />
       </Card>
 
-      {/* 风险预警 */}
-      {data.projects.some(p => p.status === 'warning' || p.status === 'danger') && (
-        <Card 
-          title="⚠️ 风险预警" 
-          style={{ marginTop: 24 }}
-          headStyle={{ backgroundColor: '#fff2f0', borderBottom: '1px solid #ffccc7' }}
-        >
-          <List
-            dataSource={data.projects.filter(p => p.status === 'warning' || p.status === 'danger')}
-            renderItem={(project) => (
-              <List.Item>
-                <div>
-                  <Tag color="error">高风险</Tag>
-                  <span style={{ marginLeft: 8, fontWeight: 500 }}>{project.name}</span>
-                  <div style={{ marginTop: 8, color: '#666' }}>
-                    {project.progress < 50 && '项目进度严重滞后，'}
-                    {project.pendingBugs > 10 && '缺陷积压过多，'}
-                    建议立即采取措施
-                  </div>
+      {/* 成员列表 */}
+      <Card title="项目成员" loading={loading} style={{ marginTop: 24 }}>
+        <List
+          grid={{ gutter: 16, column: 4 }}
+          dataSource={syncData?.members?.slice(0, 12) || []}
+          renderItem={(member: any) => (
+            <List.Item>
+              <Card size="small">
+                <div style={{ textAlign: 'center' }}>
+                  <img 
+                    src={member.userAvatar || 'https://via.placeholder.com/50'} 
+                    alt={member.userName}
+                    style={{ width: 50, height: 50, borderRadius: '50%', marginBottom: 8 }}
+                  />
+                  <div style={{ fontWeight: 500 }}>{member.userName}</div>
+                  <Tag size="small" style={{ marginTop: 4 }}>{member.roleName}</Tag>
                 </div>
-              </List.Item>
-            )}
-          />
-        </Card>
-      )}
+              </Card>
+            </List.Item>
+          )}
+        />
+      </Card>
     </div>
   );
 };
