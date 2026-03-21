@@ -140,6 +140,23 @@ router.post('/project/:id', async (req, res, next) => {
   }
 });
 
+// GET /api/sync/project/:id - 获取单个项目同步数据（不保存到数据库）
+router.get('/project/:id', async (req, res, next) => {
+  try {
+    const projectId = req.params.id === 'default' ? DEFAULT_PROJECT_ID : req.params.id;
+    
+    const result = await yunxiaoService.syncProjectData(projectId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/sync/logs - 获取同步日志
 router.get('/logs', async (req, res, next) => {
   try {
