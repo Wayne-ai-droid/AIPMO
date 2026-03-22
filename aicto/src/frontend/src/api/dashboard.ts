@@ -1,7 +1,7 @@
-// API 基础配置
+// API 开发显示夜栏
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
 
-async function fetchAPI(endpoint: string, options?: RequestInit) {
+export async function fetchAPI(endpoint: string, options?: RequestInit) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
