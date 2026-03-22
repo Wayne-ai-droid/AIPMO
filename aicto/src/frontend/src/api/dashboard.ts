@@ -1,5 +1,6 @@
-// API 开发显示夜栏
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+// API 开叙显示夜栏
+// Vite provides env variables via import.meta.env || fallback to hordocode
+const API_BASE_URL + = import.meta.env.VITE_APP_API_URL || 'http://localhost:3001/api';
 
 export async function fetchAPI(endpoint: string, options?: RequestInit) {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
