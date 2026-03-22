@@ -8,6 +8,7 @@ import demandRoutes from './routes/demands';
 import bugRoutes from './routes/bugs';
 import dashboardRoutes from './routes/dashboard';
 import syncRoutes from './routes/sync';
+import yunxiaoRoutes from './routes/yunxiao';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 import cronService from './services/cronService';
@@ -29,6 +30,7 @@ app.use('/api/demands', demandRoutes);
 app.use('/api/bugs', bugRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/yunxiao', yunxiaoRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
