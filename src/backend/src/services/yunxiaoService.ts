@@ -50,7 +50,6 @@ export async function getProjects() {
   try {
     const response: any = await yunxiaoClient.get(`/organizations/${ORG_ID}/projects`);
     
-    // 处理不同的返回格式
     if (response.result) {
       return response.result;
     } else if (response.data) {
@@ -105,10 +104,3 @@ export async function getProjectMembers(projectId: string) {
     return [];
   }
 }
-
-export default {
-  getProjects,
-  getProjectDetail,
-  getIterations,
-  getProjectMembers,
-};
