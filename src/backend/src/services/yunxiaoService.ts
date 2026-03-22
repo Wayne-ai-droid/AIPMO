@@ -1,37 +1,36 @@
 import axios from 'axios';
-import { logger } from '../utils/logger';
 
 const YUNXIAO_BASE_URL = 'https://openapi-rdc.aliyuncs.com/oapi/v1/projex';
 const YUNXIAO_TOKEN = process.env.YUNXIAO_TOKEN || '';
 const ORG_ID = '6925baaef9c52e7d8c27b51b';
 
-const yunxiaoClient = axios.create({
-  baseURL: YUNXIAO_BASE_URL,
-  headers: {
-    'x-yunxiao-token': YUNXIAO_TOKEN,
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000,
-});
-
-export async function getProjects() {
+export async function getProjects(): Promise<any[]> {
+  const url = `${YUNXIAO_BASE_URL}/organizations/${ORG_ID}/projects:search`;
+  
+  console.log('[Yunxiao] 请求URL:', url);
+  console.log('[Yunxiao] Token:', YUNXIAO_TOKEN ? '存在' : '缺失');
+  
   try {
-    console.log('[Yunxiao] 开始获取项目...');
-    console.log('[Yunxiao] Token是否存在:', !!YUNXIAO_TOKEN);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-yunxiao-token': YUNXIAO_TOKEN,
+      },
+      body: JSON.stringify({ page: 1, perPage: 50 }),
+    });
     
-    const response = await yunxiaoClient.post(
-      `/organizations/${ORG_ID}/projects:search`,
-      { page: 1, perPage: 50 }
-    );
+    if (!response.ok) {
+      console.error('[Yunxiao] HTTP错误:', response.status, response.statusText);
+      return [];
+    }
     
-    // 直接返回response（axios拦截器已处理response.data）
-    const data = response as any;
-    
-    console.log('[Yunxiao] 响应数据类型:', typeof data);
+    const data = await response.json();
+    console.log('[Yunxiao] 响应类型:', typeof data);
     console.log('[Yunxiao] 是否为数组:', Array.isArray(data));
     
-    if (Array.isArray(data) && data.length > 0) {
-      console.log(`[Yunxiao] 成功获取 ${data.length} 个项目`);
+    if (Array.isArray(data)) {
+      console.log('[Yunxiao] 项目数量:', data.length);
       return data.map((project: any) => ({
         id: project.id,
         name: project.name,
@@ -45,10 +44,10 @@ export async function getProjects() {
       }));
     }
     
-    console.log('[Yunxiao] 响应为空或格式不对');
+    console.log('[Yunxiao] 响应不是数组');
     return [];
   } catch (error: any) {
-    console.error('[Yunxiao] 错误:', error.message);
+    console.error('[Yunxiao] 请求失败:', error.message);
     return [];
   }
 }
