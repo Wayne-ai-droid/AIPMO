@@ -5,7 +5,6 @@ const YUNXIAO_BASE_URL = 'https://openapi-rdc.aliyuncs.com/oapi/v1/projex';
 const YUNXIAO_TOKEN = process.env.YUNXIAO_TOKEN || '';
 const ORG_ID = '6925baaef9c52e7d8c27b51b';
 
-// 创建axios实例
 const yunxiaoClient = axios.create({
   baseURL: YUNXIAO_BASE_URL,
   headers: {
@@ -15,41 +14,25 @@ const yunxiaoClient = axios.create({
   timeout: 30000,
 });
 
-/**
- * 获取项目列表
- */
 export async function getProjects() {
   try {
-    console.log('[Yunxiao] Fetching projects...');
-    console.log('[Yunxiao] Token:', YUNXIAO_TOKEN ? '存在' : '缺失');
+    console.log('[Yunxiao] 开始获取项目...');
+    console.log('[Yunxiao] Token是否存在:', !!YUNXIAO_TOKEN);
     
     const response = await yunxiaoClient.post(
       `/organizations/${ORG_ID}/projects:search`,
-      {
-        page: 1,
-        perPage: 50,
-      }
+      { page: 1, perPage: 50 }
     );
     
-    console.log('[Yunxiao] Response type:', typeof response);
-    console.log('[Yunxiao] Response isArray:', Array.isArray(response));
+    // 直接返回response（axios拦截器已处理response.data）
+    const data = response as any;
     
-    // 检查响应格式
-    if (!response) {
-      console.error('[Yunxiao] Response is null/undefined');
-      return [];
-    }
+    console.log('[Yunxiao] 响应数据类型:', typeof data);
+    console.log('[Yunxiao] 是否为数组:', Array.isArray(data));
     
-    // API返回的是数组
-    if (Array.isArray(response)) {
-      console.log(`[Yunxiao] Found ${response.length} projects`);
-      
-      if (response.length === 0) {
-        console.warn('[Yunxiao] Response array is empty');
-        return [];
-      }
-      
-      const projects = response.map((project: any) => ({
+    if (Array.isArray(data) && data.length > 0) {
+      console.log(`[Yunxiao] 成功获取 ${data.length} 个项目`);
+      return data.map((project: any) => ({
         id: project.id,
         name: project.name,
         description: project.description || '',
@@ -60,32 +43,19 @@ export async function getProjects() {
         memberCount: 0,
         healthScore: 80,
       }));
-      
-      console.log('[Yunxiao] Mapped projects:', projects.length);
-      return projects;
     }
     
-    // 如果不是数组，记录错误
-    console.error('[Yunxiao] Unexpected response format:', JSON.stringify(response).substring(0, 200));
+    console.log('[Yunxiao] 响应为空或格式不对');
     return [];
-    
   } catch (error: any) {
-    console.error('[Yunxiao] Error:', error.message);
-    console.error('[Yunxiao] Error response:', error.response?.data);
+    console.error('[Yunxiao] 错误:', error.message);
     return [];
   }
 }
 
 export async function getProjectDetail(projectId: string) {
-  try {
-    const projects = await getProjects();
-    const project = projects.find((p: any) => p.id === projectId);
-    if (project) return project;
-    throw new Error(`Project ${projectId} not found`);
-  } catch (error) {
-    console.error(`[Yunxiao] Failed to get project ${projectId}:`, error);
-    throw error;
-  }
+  const projects = await getProjects();
+  return projects.find((p: any) => p.id === projectId) || null;
 }
 
 export async function getIterations(projectId: string) {
