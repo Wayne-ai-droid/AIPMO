@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id                Int       @id @default(autoincrement())
+  name              String    @db.VarChar(100)
+  yunxiaoProjectId  String?   @db.VarChar(50) @map("yunxiao_project_id")
+  feishuChatId      String?   @db.VarChar(100) @map("feishu_chat_id")
+  githubRepo        String?   @db.VarChar(200) @map("github_repo")
+  status            String    @default("active") @db.VarChar(20)
+  healthScore       Int       @default(100) @map("health_score")
+  config            Json      @default("{}")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  demands   Demand[]
+  bugs      Bug[]
+  metrics   Metric[]
+  alertRules AlertRule[]
+  syncLogs  SyncLog[]
+
+  @@map("projects")
+}
+
+model Demand {
+  id            Int       @id @default(autoincrement())
+  projectId     Int       @map("project_id")
+  yunxiaoId     String?   @db.VarChar(50) @map("yunxiao_id")
+  title         String    @db.VarChar(500)
+  status        String    @db.VarChar(20)
+  priority      String?   @db.VarChar(10)
+  assignee      String?   @db.VarChar(100)
+  plannedStart  DateTime? @map("planned_start")
+  plannedEnd    DateTime? @map("planned_end")
+  actualStart   DateTime? @map("actual_start")
+  actualEnd     DateTime? @map("actual_end")
+  storyPoints   Int?      @map("story_points")
+  progress      Int       @default(0)
+  rawData       Json?     @map("raw_data")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("demands")
+}
+
+model Bug {
+  id            Int       @id @default(autoincrement())
+  projectId     Int       @map("project_id")
+  yunxiaoId     String?   @db.VarChar(50) @map("yunxiao_id")
+  title         String    @db.VarChar(500)
+  status        String    @db.VarChar(20)
+  severity      String?   @db.VarChar(20)
+  priority      String?   @db.VarChar(10)
+  reporter      String?   @db.VarChar(100)
+  assignee      String?   @db.VarChar(100)
+  foundVersion  String?   @db.VarChar(50) @map("found_version")
+  fixedVersion  String?   @db.VarChar(50) @map("fixed_version")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  resolvedAt    DateTime? @map("resolved_at")
+  rawData       Json?     @map("raw_data")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("bugs")
+}
+
+model Metric {
+  id          Int       @id @default(autoincrement())
+  projectId   Int       @map("project_id")
+  name        String    @db.VarChar(100)
+  type        String    @db.VarChar(20)
+  formula     String?
+  unit        String?   @db.VarChar(20)
+  thresholds  Json?
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("metrics")
+}
+
+model AlertRule {
+  id              Int       @id @default(autoincrement())
+  projectId       Int       @map("project_id")
+  name            String    @db.VarChar(100)
+  condition       Json
+  notifyChannels  Json      @map("notify_channels")
+  notifyTargets   Json      @map("notify_targets")
+  enabled         Boolean   @default(true)
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("alert_rules")
+}
+
+model SyncLog {
+  id            Int       @id @default(autoincrement())
+  projectId     Int       @map("project_id")
+  source        String    @db.VarChar(20)
+  syncType      String    @db.VarChar(20) @map("sync_type")
+  status        String    @db.VarChar(20)
+  recordCount   Int?      @map("record_count")
+  errorMessage  String?   @map("error_message")
+  startedAt     DateTime  @map("started_at")
+  completedAt   DateTime? @map("completed_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@map("sync_logs")
+}
