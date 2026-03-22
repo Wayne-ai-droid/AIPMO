@@ -16,43 +16,45 @@ const yunxiaoClient = axios.create({
 });
 
 /**
- * 获取项目列表（使用正确的API路径）
- * API文档: POST /oapi/v1/projex/organizations/{organizationId}/programs:search
+ * 获取项目列表
+ * API: POST /oapi/v1/projex/organizations/{organizationId}/projects:search
  */
 export async function getProjects() {
   try {
     logger.info('Fetching projects from Yunxiao API...');
+    logger.info(`Using token: ${YUNXIAO_TOKEN.substring(0, 10)}...`);
     
     const response: any = await yunxiaoClient.post(
-      `/organizations/${ORG_ID}/programs:search`,
+      `/organizations/${ORG_ID}/projects:search`,
       {
         page: 1,
         perPage: 50,
       }
     );
     
-    logger.info('Yunxiao API response:', response);
+    logger.info('Yunxiao API response received');
     
-    // 返回项目列表（API返回的是数组）
+    // API返回的是数组
     if (Array.isArray(response)) {
-      return response.map((program: any) => ({
-        id: program.id,
-        name: program.name,
-        description: program.description || '',
-        status: program.logicalStatus || 'active',
-        createdAt: program.gmtCreate,
-        updatedAt: program.gmtModified,
-        // 这些字段需要从其他API获取或估算
-        iterationCount: 0,
-        memberCount: 0,
+      logger.info(`Found ${response.length} projects`);
+      return response.map((project: any) => ({
+        id: project.id,
+        name: project.name,
+        description: project.description || '',
+        status: project.logicalStatus || 'active',
+        createdAt: project.gmtCreate,
+        updatedAt: project.gmtModified,
+        iterationCount: 0, // 需要从其他API获取
+        memberCount: 0,    // 需要从其他API获取
         healthScore: 80,
       }));
     }
     
     logger.warn('Unexpected response format:', response);
     return [];
-  } catch (error) {
-    logger.error('Failed to get projects from Yunxiao:', error);
+  } catch (error: any) {
+    logger.error('Failed to get projects from Yunxiao:', error.message);
+    logger.error('Error details:', error.response?.data || error);
     return [];
   }
 }
@@ -62,9 +64,6 @@ export async function getProjects() {
  */
 export async function getProjectDetail(projectId: string) {
   try {
-    logger.info(`Fetching project ${projectId}...`);
-    
-    // 先搜索项目列表，然后找到匹配的项目
     const projects = await getProjects();
     const project = projects.find((p: any) => p.id === projectId);
     
@@ -81,12 +80,10 @@ export async function getProjectDetail(projectId: string) {
 
 /**
  * 获取项目迭代列表
- * TODO: 需要找到正确的API路径
  */
 export async function getIterations(projectId: string) {
   try {
-    logger.info(`Fetching iterations for project ${projectId}...`);
-    // 暂时返回空数组，需要找到正确的API
+    // TODO: 实现正确的API调用
     return [];
   } catch (error) {
     logger.warn(`Failed to get iterations for project ${projectId}:`, error);
@@ -96,12 +93,10 @@ export async function getIterations(projectId: string) {
 
 /**
  * 获取项目成员列表
- * TODO: 需要找到正确的API路径
  */
 export async function getProjectMembers(projectId: string) {
   try {
-    logger.info(`Fetching members for project ${projectId}...`);
-    // 暂时返回空数组，需要找到正确的API
+    // TODO: 实现正确的API调用
     return [];
   } catch (error) {
     logger.warn(`Failed to get members for project ${projectId}:`, error);
