@@ -1,14 +1,15 @@
 import axios from 'axios';
 import { logger } from '../utils/logger';
 
-const YUNXIAO_BASE_URL = 'https://devops.aliyun.com/api';
-const YUNXIAO_TOKEN = process.env.YUNXIAO_TOKEN || 'pt-fp0mbOxHhsplobOXhLDeiWW1_6155f38a-7ea6-47b6-9274-56447618cae1';
+const YUNXIAO_BASE_URL = 'https://openapi-rdc.aliyuncs.com/oapi/v1/projex';
+const YUNXIAO_TOKEN = process.env.YUNXIAO_TOKEN || '';
+const ORG_ID = '6925baaef9c52e7d8c27b51b';
 
 // 创建axios实例
 const yunxiaoClient = axios.create({
   baseURL: YUNXIAO_BASE_URL,
   headers: {
-    'Authorization': `Bearer ${YUNXIAO_TOKEN}`,
+    'x-yunxiao-token': YUNXIAO_TOKEN,
     'Content-Type': 'application/json',
   },
   timeout: 30000,
@@ -35,7 +36,7 @@ yunxiaoClient.interceptors.response.use(
   (error) => {
     logger.error('[Yunxiao API Response Error]', {
       status: error.response?.status,
-      message: error.response?.data?.message || error.message,
+      message: error.response?.data?.errorMessage || error.message,
       url: error.config?.url,
     });
     return Promise.reject(error);
@@ -43,25 +44,23 @@ yunxiaoClient.interceptors.response.use(
 );
 
 /**
- * 获取当前用户信息
- */
-export async function getCurrentUser() {
-  try {
-    const data = await yunxiaoClient.get('/organization/info');
-    return data;
-  } catch (error) {
-    logger.error('Failed to get current user:', error);
-    throw error;
-  }
-}
-
-/**
  * 获取项目列表
  */
 export async function getProjects() {
   try {
-    const data = await yunxiaoClient.get('/projects');
-    return data.data || [];
+    const response: any = await yunxiaoClient.get(`/organizations/${ORG_ID}/projects`);
+    
+    // 处理不同的返回格式
+    if (response.result) {
+      return response.result;
+    } else if (response.data) {
+      return response.data;
+    } else if (Array.isArray(response)) {
+      return response;
+    }
+    
+    logger.warn('Unexpected response format from getProjects:', response);
+    return [];
   } catch (error) {
     logger.error('Failed to get projects:', error);
     return [];
@@ -73,8 +72,8 @@ export async function getProjects() {
  */
 export async function getProjectDetail(projectId: string) {
   try {
-    const data = await yunxiaoClient.get(`/projects/${projectId}`);
-    return data;
+    const response: any = await yunxiaoClient.get(`/organizations/${ORG_ID}/projects/${projectId}`);
+    return response.result || response.data || response;
   } catch (error) {
     logger.error(`Failed to get project ${projectId}:`, error);
     throw error;
@@ -82,104 +81,34 @@ export async function getProjectDetail(projectId: string) {
 }
 
 /**
- * 获取工作项列表（需求/缺陷）
- */
-export async function getWorkitems(
-  projectId: string,
-  workitemType?: string, // Requirement, Bug, Task
-  status?: string
-) {
-  try {
-    const params: any = {
-      spaceType: 'Project',
-      spaceIdentifier: projectId,
-    };
-    
-    if (workitemType) {
-      params.workitemType = workitemType;
-    }
-    
-    if (status) {
-      params.status = status;
-    }
-
-    const data = await yunxiaoClient.get('/workitems', { params });
-    return data.data?.list || [];
-  } catch (error) {
-    logger.error(`Failed to get workitems for project ${projectId}:`, error);
-    return [];
-  }
-}
-
-/**
- * 获取需求列表
- */
-export async function getDemands(projectId: string) {
-  return getWorkitems(projectId, 'Requirement');
-}
-
-/**
- * 获取缺陷列表
- */
-export async function getBugs(projectId: string) {
-  return getWorkitems(projectId, 'Bug');
-}
-
-/**
- * 获取迭代列表
+ * 获取项目迭代列表
  */
 export async function getIterations(projectId: string) {
   try {
-    const data = await yunxiaoClient.get(`/projects/${projectId}/iterations`);
-    return data.data || [];
+    const response: any = await yunxiaoClient.get(`/organizations/${ORG_ID}/projects/${projectId}/sprints`);
+    return response.result || response.data || [];
   } catch (error) {
-    logger.error(`Failed to get iterations for project ${projectId}:`, error);
+    logger.warn(`Failed to get iterations for project ${projectId}:`, error);
     return [];
   }
 }
 
 /**
- * 同步项目数据到本地数据库
+ * 获取项目成员列表
  */
-export async function syncProjectData(projectId: string) {
-  logger.info(`Starting sync for project ${projectId}`);
-  
+export async function getProjectMembers(projectId: string) {
   try {
-    // 并行获取项目数据
-    const [projectDetail, demands, bugs, iterations] = await Promise.all([
-      getProjectDetail(projectId),
-      getDemands(projectId),
-      getBugs(projectId),
-      getIterations(projectId),
-    ]);
-
-    const result = {
-      project: projectDetail,
-      demands,
-      bugs,
-      iterations,
-      syncedAt: new Date().toISOString(),
-    };
-
-    logger.info(`Sync completed for project ${projectId}:`, {
-      demandsCount: demands.length,
-      bugsCount: bugs.length,
-    });
-
-    return result;
+    const response: any = await yunxiaoClient.get(`/organizations/${ORG_ID}/projects/${projectId}/members`);
+    return response.result || response.data || [];
   } catch (error) {
-    logger.error(`Sync failed for project ${projectId}:`, error);
-    throw error;
+    logger.warn(`Failed to get members for project ${projectId}:`, error);
+    return [];
   }
 }
 
 export default {
-  getCurrentUser,
   getProjects,
   getProjectDetail,
-  getWorkitems,
-  getDemands,
-  getBugs,
   getIterations,
-  syncProjectData,
+  getProjectMembers,
 };
