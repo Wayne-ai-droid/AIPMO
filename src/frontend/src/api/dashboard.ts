@@ -1,8 +1,9 @@
 // API 基础配置
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+// Vite provides env variables via import.meta.env || fallback to hardcode
+const API_BASE_URL = import.meta.env.VITE_APP_API_URL || 'http://localhost:3001/api';
 
-async function fetchAPI(endpoint: string, options?: RequestInit) {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+export async function fetchAPI(endpoint: string, options?: RequestInit) {
+  const response = await fetch(\`\${API_BASE_URL}\${endpoint}\`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -11,7 +12,7 @@ async function fetchAPI(endpoint: string, options?: RequestInit) {
   });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    throw new Error(\`API error: \${response.status}\`);
   }
 
   return response.json();
@@ -23,7 +24,7 @@ export function getDashboardOverview() {
 }
 
 export function getProjectDashboard(projectId: number) {
-  return fetchAPI(`/dashboard/projects/${projectId}`);
+  return fetchAPI(\`/dashboard/projects/\${projectId}\`);
 }
 
 // Projects API
@@ -32,7 +33,7 @@ export function getProjects() {
 }
 
 export function getProject(id: number) {
-  return fetchAPI(`/projects/${id}`);
+  return fetchAPI(\`/projects/\${id}\`);
 }
 
 export function createProject(data: any) {
@@ -43,14 +44,14 @@ export function createProject(data: any) {
 }
 
 export function updateProject(id: number, data: any) {
-  return fetchAPI(`/projects/${id}`, {
+  return fetchAPI(\`/projects/\${id}\`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
 export function deleteProject(id: number) {
-  return fetchAPI(`/projects/${id}`, {
+  return fetchAPI(\`/projects/\${id}\`, {
     method: 'DELETE',
   });
 }
