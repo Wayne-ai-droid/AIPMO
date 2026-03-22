@@ -17,14 +17,13 @@ const yunxiaoClient = axios.create({
 
 /**
  * 获取项目列表
- * API: POST /oapi/v1/projex/organizations/{organizationId}/projects:search
  */
 export async function getProjects() {
   try {
-    logger.info('Fetching projects from Yunxiao API...');
-    logger.info(`Using token: ${YUNXIAO_TOKEN.substring(0, 10)}...`);
+    console.log('[Yunxiao] Fetching projects...');
+    console.log('[Yunxiao] Token:', YUNXIAO_TOKEN ? '存在' : '缺失');
     
-    const response: any = await yunxiaoClient.post(
+    const response = await yunxiaoClient.post(
       `/organizations/${ORG_ID}/projects:search`,
       {
         page: 1,
@@ -32,74 +31,67 @@ export async function getProjects() {
       }
     );
     
-    logger.info('Yunxiao API response received');
+    console.log('[Yunxiao] Response type:', typeof response);
+    console.log('[Yunxiao] Response isArray:', Array.isArray(response));
+    
+    // 检查响应格式
+    if (!response) {
+      console.error('[Yunxiao] Response is null/undefined');
+      return [];
+    }
     
     // API返回的是数组
     if (Array.isArray(response)) {
-      logger.info(`Found ${response.length} projects`);
-      return response.map((project: any) => ({
+      console.log(`[Yunxiao] Found ${response.length} projects`);
+      
+      if (response.length === 0) {
+        console.warn('[Yunxiao] Response array is empty');
+        return [];
+      }
+      
+      const projects = response.map((project: any) => ({
         id: project.id,
         name: project.name,
         description: project.description || '',
         status: project.logicalStatus || 'active',
         createdAt: project.gmtCreate,
         updatedAt: project.gmtModified,
-        iterationCount: 0, // 需要从其他API获取
-        memberCount: 0,    // 需要从其他API获取
+        iterationCount: 0,
+        memberCount: 0,
         healthScore: 80,
       }));
+      
+      console.log('[Yunxiao] Mapped projects:', projects.length);
+      return projects;
     }
     
-    logger.warn('Unexpected response format:', response);
+    // 如果不是数组，记录错误
+    console.error('[Yunxiao] Unexpected response format:', JSON.stringify(response).substring(0, 200));
     return [];
+    
   } catch (error: any) {
-    logger.error('Failed to get projects from Yunxiao:', error.message);
-    logger.error('Error details:', error.response?.data || error);
+    console.error('[Yunxiao] Error:', error.message);
+    console.error('[Yunxiao] Error response:', error.response?.data);
     return [];
   }
 }
 
-/**
- * 获取项目详情
- */
 export async function getProjectDetail(projectId: string) {
   try {
     const projects = await getProjects();
     const project = projects.find((p: any) => p.id === projectId);
-    
-    if (project) {
-      return project;
-    }
-    
+    if (project) return project;
     throw new Error(`Project ${projectId} not found`);
   } catch (error) {
-    logger.error(`Failed to get project ${projectId}:`, error);
+    console.error(`[Yunxiao] Failed to get project ${projectId}:`, error);
     throw error;
   }
 }
 
-/**
- * 获取项目迭代列表
- */
 export async function getIterations(projectId: string) {
-  try {
-    // TODO: 实现正确的API调用
-    return [];
-  } catch (error) {
-    logger.warn(`Failed to get iterations for project ${projectId}:`, error);
-    return [];
-  }
+  return [];
 }
 
-/**
- * 获取项目成员列表
- */
 export async function getProjectMembers(projectId: string) {
-  try {
-    // TODO: 实现正确的API调用
-    return [];
-  } catch (error) {
-    logger.warn(`Failed to get members for project ${projectId}:`, error);
-    return [];
-  }
+  return [];
 }
