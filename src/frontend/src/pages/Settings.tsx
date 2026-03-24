@@ -1,53 +1,65 @@
-import React, { useState } from 'react';
-import { Card, Form, Input, Button, Select, Switch, Table, Tag, Modal, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { Card, Form, Input, Button, Select, Switch, Table, Tag, Modal, message, Spin, Empty } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SyncOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  getProjects,
+  createProject,
+  updateProject,
+  deleteProject
+} from '../api/dashboard';
 
 const { Option } = Select;
 
-// 模拟项目配置数据
-const mockProjects = [
-  { 
-    id: 1, 
-    name: '电商中台重构', 
-    yunxiaoProjectId: 'proj-001',
-    feishuChatId: 'oc_xxx1',
-    syncEnabled: true,
-    syncInterval: '15min',
-    lastSync: '2026-03-19 10:30:00'
-  },
-  { 
-    id: 2, 
-    name: '支付系统升级', 
-    yunxiaoProjectId: 'proj-002',
-    feishuChatId: 'oc_xxx2',
-    syncEnabled: true,
-    syncInterval: '15min',
-    lastSync: '2026-03-19 10:15:00'
-  },
-  { 
-    id: 3, 
-    name: '用户中心V2', 
-    yunxiaoProjectId: 'proj-003',
-    feishuChatId: null,
-    syncEnabled: false,
-    syncInterval: '1hour',
-    lastSync: null
-  },
-];
-
-// 模拟监控指标配置
-const mockMetrics = [
-  { id: 1, name: '需求完成率', enabled: true, thresholds: { green: 80, yellow: 60, red: 0 } },
-  { id: 2, name: '缺陷密度', enabled: true, thresholds: { green: 3, yellow: 5, red: 10 } },
-  { id: 3, name: '进度偏差', enabled: true, thresholds: { green: 10, yellow: 20, red: 30 } },
-  { id: 4, name: '代码覆盖率', enabled: false, thresholds: { green: 80, yellow: 60, red: 40 } },
-];
+interface ProjectConfig {
+  id: number;
+  name: string;
+  yunxiaoProjectId: string;
+  feishuChatId: string | null;
+  githubRepo: string | null;
+  syncEnabled: boolean;
+  syncInterval: '15min' | '1hour' | '1day';
+  lastSync: string | null;
+  status: string;
+}
 
 const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState('projects');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState<any>(null);
+  const [editingProject, setEditingProject] = useState<ProjectConfig | null>(null);
   const [form] = Form.useForm();
+  const [projects, setProjects] = useState<ProjectConfig[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncLoading, setSyncLoading] = useState<number | null>(null);
+
+  const fetchProjects = async () => {
+    setLoading(true);
+    try {
+      const response = await getProjects();
+      if (response.success) {
+        // 转换数据格式以匹配前端需求
+        const formattedProjects = response.data.map((project: any) => ({
+          id: project.id,
+          name: project.name,
+          yunxiaoProjectId: project.yunxiaoProjectId || '',
+          feishuChatId: project.feishuChatId || null,
+          githubRepo: project.githubRepo || null,
+          syncEnabled: true, // 默认开启同步
+          syncInterval: '15min' as const, // 默认15分钟
+          lastSync: null, // 需要从 sync_logs 表获取
+          status: project.status
+        }));
+        setProjects(formattedProjects);
+      }
+    } catch (error) {
+      message.error('获取项目列表失败: ' + (error as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
 
   const handleAddProject = () => {
     setEditingProject(null);
@@ -55,9 +67,13 @@ const Settings: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleEditProject = (project: any) => {
+  const handleEditProject = (project: ProjectConfig) => {
     setEditingProject(project);
-    form.setFieldsValue(project);
+    form.setFieldsValue({
+      ...project,
+      feishuChatId: project.feishuChatId || undefined,
+      githubRepo: project.githubRepo || undefined
+    });
     setIsModalOpen(true);
   };
 
@@ -65,23 +81,49 @@ const Settings: React.FC = () => {
     Modal.confirm({
       title: '确认删除',
       content: '删除后将无法恢复，是否继续？',
-      onOk() {
-        message.success('删除成功');
+      onOk: async () => {
+        try {
+          await deleteProject(id);
+          message.success('删除成功');
+          fetchProjects();
+        } catch (error) {
+          message.error('删除失败: ' + (error as Error).message);
+        }
       },
     });
   };
 
-  const handleSaveProject = (values: any) => {
-    console.log('保存项目:', values);
-    message.success(editingProject ? '更新成功' : '添加成功');
-    setIsModalOpen(false);
+  const handleSaveProject = async (values: any) => {
+    try {
+      if (editingProject) {
+        // 更新项目
+        await updateProject(editingProject.id, values);
+        message.success('更新成功');
+      } else {
+        // 创建项目
+        await createProject(values);
+        message.success('添加成功');
+      }
+      setIsModalOpen(false);
+      fetchProjects();
+    } catch (error) {
+      message.error('保存失败: ' + (error as Error).message);
+    }
   };
 
-  const handleSyncProject = (id: number) => {
-    message.loading({ content: '正在同步...', key: 'sync' });
-    setTimeout(() => {
-      message.success({ content: '同步完成', key: 'sync' });
-    }, 2000);
+  const handleSyncProject = async (id: number) => {
+    setSyncLoading(id);
+    try {
+      // 这里应该调用同步API，但目前后端还没有实现
+      // 模拟同步过程
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      message.success('同步完成');
+      fetchProjects();
+    } catch (error) {
+      message.error('同步失败: ' + (error as Error).message);
+    } finally {
+      setSyncLoading(null);
+    }
   };
 
   const projectColumns = [
@@ -90,13 +132,29 @@ const Settings: React.FC = () => {
       title: '云效项目ID', 
       dataIndex: 'yunxiaoProjectId', 
       key: 'yunxiaoProjectId',
-      render: (text: string) => <code>{text}</code>
+      render: (text: string) => text ? <code>{text}</code> : '-'
     },
     { 
       title: '飞书群', 
       dataIndex: 'feishuChatId', 
       key: 'feishuChatId',
       render: (text: string) => text ? <Tag color="blue">已绑定</Tag> : <Tag>未绑定</Tag>
+    },
+    { 
+      title: 'GitHub仓库', 
+      dataIndex: 'githubRepo', 
+      key: 'githubRepo',
+      render: (text: string) => text ? <code>{text}</code> : '-'
+    },
+    { 
+      title: '状态', 
+      dataIndex: 'status', 
+      key: 'status',
+      render: (status: string) => (
+        <Tag color={status === 'active' ? 'success' : 'default'}>
+          {status === 'active' ? '活跃' : '停用'}
+        </Tag>
+      )
     },
     { 
       title: '自动同步', 
@@ -107,18 +165,9 @@ const Settings: React.FC = () => {
           checked={enabled} 
           checkedChildren="开启" 
           unCheckedChildren="关闭"
+          disabled={true} // 需要后端支持
         />
       )
-    },
-    { 
-      title: '同步频率', 
-      dataIndex: 'syncInterval', 
-      key: 'syncInterval',
-      render: (text: string) => ({
-        '15min': '15分钟',
-        '1hour': '1小时',
-        '1day': '1天'
-      })[text] || text
     },
     { 
       title: '最后同步', 
@@ -129,11 +178,12 @@ const Settings: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      render: (_: any, record: any) => (
+      render: (_: any, record: ProjectConfig) => (
         <div>
           <Button 
             type="text" 
             icon={<SyncOutlined />} 
+            loading={syncLoading === record.id}
             onClick={() => handleSyncProject(record.id)}
           >
             同步
@@ -169,17 +219,18 @@ const Settings: React.FC = () => {
           checked={enabled} 
           checkedChildren="启用" 
           unCheckedChildren="禁用"
+          disabled={true} // 需要后端支持
         />
       )
     },
     { 
       title: '阈值配置', 
       key: 'thresholds',
-      render: (_: any, record: any) => (
+      render: () => (
         <div>
-          <Tag color="success">优秀 ≥{record.thresholds.green}</Tag>
-          <Tag color="warning">良好 ≥{record.thresholds.yellow}</Tag>
-          <Tag color="error">警告 <{record.thresholds.red}</Tag>
+          <Tag color="success">优秀 ≥80%</Tag>
+          <Tag color="warning">良好 ≥60%</Tag>
+          <Tag color="error">警告 &lt;60%</Tag>
         </div>
       )
     },
@@ -187,9 +238,17 @@ const Settings: React.FC = () => {
       title: '操作',
       key: 'action',
       render: () => (
-        <Button type="link">编辑阈值</Button>
+        <Button type="link" disabled>编辑阈值</Button>
       ),
     },
+  ];
+
+  // 模拟监控指标配置（需要后端支持）
+  const mockMetrics = [
+    { id: 1, name: '需求完成率', enabled: true },
+    { id: 2, name: '缺陷密度', enabled: true },
+    { id: 3, name: '进度偏差', enabled: true },
+    { id: 4, name: '代码覆盖率', enabled: false },
   ];
 
   return (
@@ -213,11 +272,27 @@ const Settings: React.FC = () => {
                 添加项目
               </Button>
             </div>
-            <Table 
-              columns={projectColumns} 
-              dataSource={mockProjects}
-              rowKey="id"
-            />
+            
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '24px' }}>
+                <Spin tip="加载项目配置..." />
+              </div>
+            ) : projects.length === 0 ? (
+              <Empty 
+                description="暂无项目配置，请先添加项目"
+                style={{ marginTop: '48px' }}
+              >
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddProject}>
+                  添加第一个项目
+                </Button>
+              </Empty>
+            ) : (
+              <Table 
+                columns={projectColumns} 
+                dataSource={projects}
+                rowKey="id"
+              />
+            )}
           </div>
         )}
 
@@ -238,11 +313,11 @@ const Settings: React.FC = () => {
           <div>
             <Form layout="vertical">
               <Form.Item label="飞书通知开关">
-                <Switch defaultChecked />
+                <Switch defaultChecked disabled />
               </Form.Item>
               
               <Form.Item label="通知频率">
-                <Select defaultValue="realtime" style={{ width: 200 }}>
+                <Select defaultValue="realtime" style={{ width: 200 }} disabled>
                   <Option value="realtime">实时通知</Option>
                   <Option value="hourly">每小时汇总</Option>
                   <Option value="daily">每日汇总</Option>
@@ -250,7 +325,7 @@ const Settings: React.FC = () => {
               </Form.Item>
 
               <Form.Item label="风险等级通知">
-                <Select mode="multiple" defaultValue={['high', 'medium']} style={{ width: 400 }}>
+                <Select mode="multiple" defaultValue={['high', 'medium']} style={{ width: 400 }} disabled>
                   <Option value="high">🔴 高风险</Option>
                   <Option value="medium">🟡 中风险</Option>
                   <Option value="low">🔵 低风险</Option>
@@ -258,7 +333,7 @@ const Settings: React.FC = () => {
               </Form.Item>
 
               <Form.Item>
-                <Button type="primary">保存设置</Button>
+                <Button type="primary" disabled>保存设置</Button>
               </Form.Item>
             </Form>
           </div>
@@ -301,28 +376,25 @@ const Settings: React.FC = () => {
           </Form.Item>
 
           <Form.Item
-            label="自动同步"
-            name="syncEnabled"
-            valuePropName="checked"
-            initialValue={true}
+            label="GitHub仓库"
+            name="githubRepo"
           >
-            <Switch />
+            <Input placeholder="例如：Wayne-ai-droid/AIPMO（可选）" />
           </Form.Item>
 
           <Form.Item
-            label="同步频率"
-            name="syncInterval"
-            initialValue="15min"
+            label="项目状态"
+            name="status"
+            initialValue="active"
           >
             <Select>
-              <Option value="15min">15分钟</Option>
-              <Option value="1hour">1小时</Option>
-              <Option value="1day">1天</Option>
+              <Option value="active">活跃</Option>
+              <Option value="inactive">停用</Option>
             </Select>
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </ div>
   );
 };
 

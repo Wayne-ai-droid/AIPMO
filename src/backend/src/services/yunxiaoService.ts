@@ -64,3 +64,26 @@ export async function getIterations(projectId: string) {
 export async function getProjectMembers(projectId: string) {
   return [];
 }
+
+export async function syncProjectData(projectId: string) {
+  // 模拟从云效获取项目详细数据
+  // 在实际实现中，这里会调用云效API获取需求和缺陷数据
+  
+  const mockDemands = [
+    { id: 'demand-001', title: '用户登录功能', status: 'DONE', priority: 'P0', assignee: { name: '张三' } },
+    { id: 'demand-002', title: '订单管理模块', status: 'DOING', priority: 'P0', assignee: { name: '李四' } },
+    { id: 'demand-003', title: '支付接口集成', status: 'TODO', priority: 'P1', assignee: { name: '王五' } },
+  ];
+  
+  const mockBugs = [
+    { id: 'bug-001', title: '页面加载缓慢', status: 'FIXED', severity: 'normal', priority: 'P2', assignee: { name: '张三' } },
+    { id: 'bug-002', title: '表单验证错误', status: 'NEW', severity: 'serious', priority: 'P0', assignee: { name: '李四' } },
+  ];
+  
+  return {
+    projectId,
+    demands: mockDemands,
+    bugs: mockBugs,
+    syncedAt: new Date().toISOString(),
+  };
+}
