@@ -12,7 +12,8 @@ router.get('/', async (req, res, next) => {
         _count: {
           select: {
             demands: true,
-            bugs: true
+            bugs: true,
+            iterations: true,
           }
         }
       },
@@ -22,9 +23,14 @@ router.get('/', async (req, res, next) => {
     // 计算每个项目的健康度
     const projectsWithHealth = await Promise.all(
       projects.map(async (project) => {
-        const health = await calculateProjectHealth(project.id);
+        let health = { score: project.healthScore, status: 'good' };
+        try {
+          const h = await calculateProjectHealth(project.id);
+          health = { score: h.score, status: h.status };
+        } catch (e) {}
         return {
           ...project,
+          iterationCount: project._count.iterations,
           healthScore: health.score,
           healthStatus: health.status
         };

@@ -1,5 +1,5 @@
 // API 基础配置
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 export async function fetchAPI(endpoint: string, options?: RequestInit) {
   const url = API_BASE_URL + endpoint;
@@ -54,4 +54,28 @@ export function deleteProject(id: number) {
   return fetchAPI('/projects/' + id, {
     method: 'DELETE',
   });
+}
+
+// Sync API
+export function syncFromYunxiao() {
+  return fetchAPI('/sync/projects', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+// Config API
+export function getConfig() {
+  return fetchAPI('/config');
+}
+
+export function updateConfig(data: any) {
+  return fetchAPI('/config', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function testYunxiaoConnection() {
+  return fetchAPI('/config/test');
 }

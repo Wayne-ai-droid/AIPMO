@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Tag, Statistic, Spin, Empty, Button } from 'antd';
-import { ProjectOutlined, TeamOutlined, CalendarOutlined, ReloadOutlined } from '@ant-design/icons';
-import { getYunxiaoProjects } from '../api/yunxiao';
+import { Card, Row, Col, Tag, Statistic, Spin, Empty, Button, message } from 'antd';
+import { ProjectOutlined, TeamOutlined, CalendarOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
+import { getProjects, syncFromYunxiao } from '../api/dashboard';
 
 interface Project {
-  id: string;
+  id: string | number;
   name: string;
   description: string;
   status: string;
@@ -17,14 +17,16 @@ interface Project {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // 从数据库读取项目列表
   const fetchProjects = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await getYunxiaoProjects();
+      const response = await getProjects();
       if (response.success) {
         setProjects(response.data || []);
       } else {
@@ -34,6 +36,24 @@ const Dashboard: React.FC = () => {
       setError('获取项目列表失败: ' + (err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 从云效同步数据后刷新
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncFromYunxiao();
+      if (res.success) {
+        message.success('同步成功，正在刷新数据...');
+        await fetchProjects();
+      } else {
+        message.error('同步失败: ' + (res.message || '未知错误'));
+      }
+    } catch (err) {
+      message.error('同步失败: ' + (err as Error).message);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -53,7 +73,7 @@ const Dashboard: React.FC = () => {
     return { text: '需关注', color: 'warning' };
   };
 
-  const handleProjectClick = (projectId: string) => {
+  const handleProjectClick = (projectId: string | number) => {
     navigate(`/projects/${projectId}`);
   };
 
@@ -83,39 +103,61 @@ const Dashboard: React.FC = () => {
         <h1 style={{ margin: 0 }}>
           <ProjectOutlined style={{ marginRight: 12 }} />
           项目列表
-          <Tag color="blue" style={{ marginLeft: 12 }}>{projects.length} 个项目</Tag>
+          <Tag color="blue" style={{ marginLeft: 12, fontSize: '14px' }}>
+            {projects.length} 个项目
+          </Tag>
         </h1>
-        <Button icon={<ReloadOutlined />} onClick={fetchProjects}>
-          刷新
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchProjects}
+            loading={loading}
+          >
+            刷新
+          </Button>
+          <Button
+            type="primary"
+            icon={<SyncOutlined />}
+            onClick={handleSync}
+            loading={syncing}
+          >
+            从云效同步
+          </Button>
+        </div>
       </div>
 
       {projects.length === 0 ? (
-        <Empty description="暂无项目数据" />
+        <Empty
+          description="暂无项目数据，点击「从云效同步」获取最新数据"
+          style={{ marginTop: 80 }}
+        >
+          <Button type="primary" icon={<SyncOutlined />} onClick={handleSync} loading={syncing}>
+            从云效同步
+          </Button>
+        </Empty>
       ) : (
-        <Row gutter={[24, 24]}>
+        <Row gutter={[16, 16]}>
           {projects.map((project) => {
-            const health = getHealthStatus(project.healthScore);
+            const healthStatus = getHealthStatus(project.healthScore || 0);
             return (
-              <Col xs={24} sm={12} lg={8} xl={6} key={project.id}>
+              <Col key={project.id} xs={24} sm={12} lg={8} xl={6}>
                 <Card
                   hoverable
                   onClick={() => handleProjectClick(project.id)}
                   style={{ height: '100%', cursor: 'pointer' }}
-                  bodyStyle={{ padding: '20px' }}
+                  styles={{ body: { height: '100%' } }}
                 >
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>{project.name}</h3>
-                      <Tag color={health.color}>{health.text}</Tag>
-                    </div>
-                    <p style={{ 
-                      marginTop: '8px', 
-                      marginBottom: 0, 
-                      color: '#666', 
-                      fontSize: '14px',
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <h3 style={{ margin: 0, flex: 1, marginRight: 8 }}>{project.name}</h3>
+                    <Tag color={healthStatus.color}>{healthStatus.text}</Tag>
+                  </div>
+
+                  <div style={{ minHeight: 40 }}>
+                    <p style={{
+                      color: '#666',
+                      margin: 0,
+                      fontSize: '13px',
                       overflow: 'hidden',
-                      textOverflow: 'ellipsis',
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: 'vertical'
@@ -128,7 +170,7 @@ const Dashboard: React.FC = () => {
                     <Col span={8}>
                       <Statistic
                         title="迭代"
-                        value={project.iterationCount}
+                        value={project.iterationCount || 0}
                         prefix={<CalendarOutlined />}
                         valueStyle={{ fontSize: '16px' }}
                       />
@@ -136,7 +178,7 @@ const Dashboard: React.FC = () => {
                     <Col span={8}>
                       <Statistic
                         title="成员"
-                        value={project.memberCount}
+                        value={project.memberCount || 0}
                         prefix={<TeamOutlined />}
                         valueStyle={{ fontSize: '16px' }}
                       />
@@ -144,11 +186,11 @@ const Dashboard: React.FC = () => {
                     <Col span={8}>
                       <Statistic
                         title="健康度"
-                        value={project.healthScore}
+                        value={project.healthScore || 0}
                         suffix="分"
-                        valueStyle={{ 
-                          fontSize: '16px', 
-                          color: getHealthColor(project.healthScore)
+                        valueStyle={{
+                          fontSize: '16px',
+                          color: getHealthColor(project.healthScore || 0)
                         }}
                       />
                     </Col>

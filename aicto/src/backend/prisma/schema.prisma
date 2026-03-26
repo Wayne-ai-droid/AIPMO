@@ -8,98 +8,95 @@ datasource db {
 }
 
 model Project {
-  id                Int       @id @default(autoincrement())
-  name              String
-  yunxiaoProjectId  String?   @map("yunxiao_project_id")
-  feishuChatId      String?   @map("feishu_chat_id")
-  githubRepo        String?   @map("github_repo")
-  status            String    @default("active")
-  healthScore       Int       @default(100) @map("health_score")
-  config            String    @default("{}")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-
-  demands   Demand[]
-  bugs      Bug[]
-  iterations Iteration[]
-  syncLogs  SyncLog[]
+  id               Int         @id @default(autoincrement())
+  name             String
+  yunxiaoProjectId String?     @unique @map("yunxiao_project_id")
+  description      String?     @default("")
+  feishuChatId     String?     @map("feishu_chat_id")
+  githubRepo       String?     @map("github_repo")
+  status           String      @default("active")
+  memberCount      Int         @default(0) @map("member_count")
+  healthScore      Int         @default(100) @map("health_score")
+  config           String      @default("{}")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+  bugs             Bug[]
+  demands          Demand[]
+  iterations       Iteration[]
+  syncLogs         SyncLog[]
 
   @@map("projects")
 }
 
 model Demand {
-  id            Int       @id @default(autoincrement())
-  projectId     Int       @map("project_id")
-  yunxiaoId     String?   @map("yunxiao_id")
-  title         String
-  status        String
-  priority      String?
-  assignee      String?
-  plannedStart  DateTime? @map("planned_start")
-  plannedEnd    DateTime? @map("planned_end")
-  actualStart   DateTime? @map("actual_start")
-  actualEnd     DateTime? @map("actual_end")
-  storyPoints   Int?      @map("story_points")
-  progress      Int       @default(0)
-  rawData       String?   @map("raw_data")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  project Project @relation(fields: [projectId], references: [id])
+  id           Int       @id @default(autoincrement())
+  projectId    Int       @map("project_id")
+  yunxiaoId    String?   @map("yunxiao_id")
+  title        String
+  status       String
+  priority     String?
+  assignee     String?
+  plannedStart DateTime? @map("planned_start")
+  plannedEnd   DateTime? @map("planned_end")
+  actualStart  DateTime? @map("actual_start")
+  actualEnd    DateTime? @map("actual_end")
+  storyPoints  Int?      @map("story_points")
+  progress     Int       @default(0)
+  rawData      String?   @map("raw_data")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  project      Project   @relation(fields: [projectId], references: [id])
 
   @@map("demands")
 }
 
 model Bug {
-  id            Int       @id @default(autoincrement())
-  projectId     Int       @map("project_id")
-  yunxiaoId     String?   @map("yunxiao_id")
-  title         String
-  status        String
-  severity      String?
-  priority      String?
-  reporter      String?
-  assignee      String?
-  foundVersion  String?   @map("found_version")
-  fixedVersion  String?   @map("fixed_version")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  resolvedAt    DateTime? @map("resolved_at")
-  rawData       String?   @map("raw_data")
-
-  project Project @relation(fields: [projectId], references: [id])
+  id           Int       @id @default(autoincrement())
+  projectId    Int       @map("project_id")
+  yunxiaoId    String?   @map("yunxiao_id")
+  title        String
+  status       String
+  severity     String?
+  priority     String?
+  reporter     String?
+  assignee     String?
+  foundVersion String?   @map("found_version")
+  fixedVersion String?   @map("fixed_version")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  rawData      String?   @map("raw_data")
+  project      Project   @relation(fields: [projectId], references: [id])
 
   @@map("bugs")
 }
 
 model Iteration {
-  id            Int       @id @default(autoincrement())
-  projectId     Int       @map("project_id")
-  yunxiaoId     String?   @map("yunxiao_id")
-  name          String
-  status        String
-  startDate     DateTime? @map("start_date")
-  endDate       DateTime? @map("end_date")
-  owner         String?
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  project Project @relation(fields: [projectId], references: [id])
+  id        Int       @id @default(autoincrement())
+  projectId Int       @map("project_id")
+  yunxiaoId String?   @unique @map("yunxiao_id")
+  name      String
+  status    String
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  owner     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  project   Project   @relation(fields: [projectId], references: [id])
 
   @@map("iterations")
 }
 
 model SyncLog {
-  id            Int       @id @default(autoincrement())
-  projectId     Int       @map("project_id")
-  source        String
-  syncType      String    @map("sync_type")
-  status        String
-  recordCount   Int?      @map("record_count")
-  errorMessage  String?   @map("error_message")
-  startedAt     DateTime  @map("started_at")
-  completedAt   DateTime? @map("completed_at")
-
-  project Project @relation(fields: [projectId], references: [id])
+  id           Int       @id @default(autoincrement())
+  projectId    Int       @map("project_id")
+  source       String
+  syncType     String    @map("sync_type")
+  status       String
+  recordCount  Int?      @map("record_count")
+  errorMessage String?   @map("error_message")
+  startedAt    DateTime  @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+  project      Project   @relation(fields: [projectId], references: [id])
 
   @@map("sync_logs")
 }

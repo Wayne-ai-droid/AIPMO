@@ -9,11 +9,21 @@ import bugRoutes from './routes/bugs';
 import dashboardRoutes from './routes/dashboard';
 import syncRoutes from './routes/sync';
 import yunxiaoRoutes from './routes/yunxiao';
+import configRoutes from './routes/config';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 import cronService from './services/cronService';
 
 dotenv.config();
+
+// 全局异常捕获，防止未处理的 Promise rejection 导致进程崩溃
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException] 未捕获异常，进程继续运行:', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection] 未处理的 Promise 拒绝，进程继续运行:', reason);
+});
 
 const app = express();
 export const prisma = new PrismaClient();
@@ -31,6 +41,7 @@ app.use('/api/bugs', bugRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/yunxiao', yunxiaoRoutes);
+app.use('/api/config', configRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -49,9 +60,9 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-// 启动服务器
-app.listen(PORT, () => {
-  logger.info(`AICTO API server running on port ${PORT}`);
+// 启动服务器（只监听本地回环地址）
+app.listen(PORT, '127.0.0.1', () => {
+  logger.info(`AICTO API server running on port ${PORT} (localhost only)`);
   
   // 启动定时任务
   cronService.startCronJobs();

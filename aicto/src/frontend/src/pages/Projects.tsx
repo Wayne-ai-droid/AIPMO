@@ -1,48 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Tag, Badge, Spin, message, Button } from 'antd';
-import { EyeOutlined } from '@ant-design/icons';
-
-const API_BASE_URL = 'http://localhost:3001/api';
+import { Table, Tag, Badge, Spin, Button, message } from 'antd';
+import { EyeOutlined, SyncOutlined, ReloadOutlined } from '@ant-design/icons';
+import { getProjects, syncFromYunxiao } from '../api/dashboard';
 
 const Projects: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [syncData, setSyncData] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+
+  const fetchProjects = async () => {
+    setLoading(true);
+    try {
+      const res = await getProjects();
+      if (res.success) {
+        setProjects(res.data || []);
+      } else {
+        message.error('获取项目列表失败');
+      }
+    } catch (err) {
+      message.error('连接后端服务失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const res = await syncFromYunxiao();
+      if (res.success) {
+        message.success('同步成功');
+        await fetchProjects();
+      } else {
+        message.error('同步失败: ' + (res.message || '未知错误'));
+      }
+    } catch (err) {
+      message.error('同步失败: ' + (err as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
-    // 调用后端API获取真实数据
-    fetch(`${API_BASE_URL}/sync/project/default`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setSyncData(data.data);
-          setLoading(false);
-        } else {
-          message.error('获取数据失败');
-          setLoading(false);
-        }
-      })
-      .catch(err => {
-        message.error('连接后端服务失败');
-        setLoading(false);
-      });
+    fetchProjects();
   }, []);
-
-  // 从冲刺数据生成项目列表
-  const projects = syncData?.sprints ? [
-    {
-      id: 1,
-      name: 'MFP项目',
-      yunxiaoProjectId: syncData.projectId,
-      healthScore: 85,
-      status: 'active',
-      sprints: syncData.sprints.length,
-      members: syncData.members.length,
-      manager: '林博',
-      lastUpdate: new Date().toLocaleString()
-    }
-  ] : [];
 
   const columns = [
     {
@@ -50,8 +53,8 @@ const Projects: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       render: (text: string, record: any) => (
-        <a 
-          href="#" 
+        <a
+          href="#"
           onClick={(e) => {
             e.preventDefault();
             navigate(`/projects/${record.id}`);
@@ -66,21 +69,22 @@ const Projects: React.FC = () => {
       title: '云效项目ID',
       dataIndex: 'yunxiaoProjectId',
       key: 'yunxiaoProjectId',
-      render: (text: string) => (
+      render: (text: string) => text ? (
         <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>
-          {text?.substring(0, 16)}...
+          {text.substring(0, 16)}...
         </code>
-      ),
+      ) : '-',
     },
     {
       title: '健康度',
       dataIndex: 'healthScore',
       key: 'healthScore',
       render: (score: number) => {
-        let color = 'success';
-        if (score < 60) color = 'error';
-        else if (score < 80) color = 'warning';
-        return <Badge color={color} text={`${score}分`} />;
+        const s = score ?? 100;
+        let color: string = 'success';
+        if (s < 60) color = 'error';
+        else if (s < 80) color = 'warning';
+        return <Badge color={color} text={`${s}分`} />;
       }
     },
     {
@@ -98,32 +102,19 @@ const Projects: React.FC = () => {
       }
     },
     {
-      title: '冲刺数',
-      dataIndex: 'sprints',
-      key: 'sprints',
-    },
-    {
-      title: '成员数',
-      dataIndex: 'members',
-      key: 'members',
-    },
-    {
-      title: '负责人',
-      dataIndex: 'manager',
-      key: 'manager',
-    },
-    {
-      title: '最后更新',
-      dataIndex: 'lastUpdate',
-      key: 'lastUpdate',
+      title: '描述',
+      dataIndex: 'description',
+      key: 'description',
+      render: (text: string) => text || '-',
+      ellipsis: true,
     },
     {
       title: '操作',
       key: 'action',
       render: (_: any, record: any) => (
-        <Button 
-          type="primary" 
-          size="small" 
+        <Button
+          type="primary"
+          size="small"
           icon={<EyeOutlined />}
           onClick={() => navigate(`/projects/${record.id}`)}
         >
@@ -135,16 +126,26 @@ const Projects: React.FC = () => {
 
   return (
     <div style={{ padding: 24 }}>
-      <h1 style={{ marginBottom: 24 }}>
-        项目管理
-        <Tag color="green" style={{ marginLeft: 12 }}>真实数据</Tag>
-      </h1>
-      <Table 
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ margin: 0 }}>
+          项目管理
+          <Tag color="blue" style={{ marginLeft: 12 }}>{projects.length} 个项目</Tag>
+        </h1>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button icon={<ReloadOutlined />} onClick={fetchProjects} loading={loading}>
+            刷新
+          </Button>
+          <Button type="primary" icon={<SyncOutlined />} onClick={handleSync} loading={syncing}>
+            从云效同步
+          </Button>
+        </div>
+      </div>
+      <Table
         columns={columns}
         dataSource={projects}
         loading={loading}
         rowKey="id"
-        pagination={false}
+        pagination={{ pageSize: 20 }}
       />
     </div>
   );

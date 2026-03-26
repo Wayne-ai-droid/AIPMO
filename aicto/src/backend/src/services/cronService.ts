@@ -12,19 +12,19 @@ export function startCronJobs() {
   // 每15分钟同步一次项目数据
   cron.schedule('*/15 * * * *', async () => {
     logger.info('[Cron] Starting scheduled project sync');
-    await syncAllProjects();
+    try { await syncAllProjects(); } catch (e) { logger.error('[Cron] syncAllProjects crashed:', e); }
   });
 
   // 每小时生成一次项目健康度报告
   cron.schedule('0 * * * *', async () => {
     logger.info('[Cron] Starting health score calculation');
-    await calculateAllHealthScores();
+    try { await calculateAllHealthScores(); } catch (e) { logger.error('[Cron] calculateAllHealthScores crashed:', e); }
   });
 
   // 每天凌晨2点进行全量同步
   cron.schedule('0 2 * * *', async () => {
     logger.info('[Cron] Starting daily full sync');
-    await fullSyncAllProjects();
+    try { await fullSyncAllProjects(); } catch (e) { logger.error('[Cron] fullSyncAllProjects crashed:', e); }
   });
 
   logger.info('Cron jobs started successfully');
@@ -43,60 +43,75 @@ async function syncAllProjects() {
       if (!project.yunxiaoProjectId) continue;
 
       try {
-        await syncProject(project.id, project.yunxiaoProjectId);
+        // 使用现有的云效服务函数获取冲刺数据
+        const sprints = await yunxiaoService.getIterations(project.yunxiaoProjectId);
+        
+        // 记录同步日志
+        const syncLog = await prisma.syncLog.create({
+          data: {
+            projectId: project.id,
+            source: 'yunxiao',
+            syncType: 'incremental',
+            status: 'running',
+            startedAt: new Date(),
+          }
+        });
+
+        // 保存冲刺数据到数据库
+        for (const sprint of sprints) {
+          await prisma.iteration.upsert({
+            where: { yunxiaoId: sprint.id },
+            update: {
+              name: sprint.name,
+              status: mapStatus(sprint.status),
+              startDate: sprint.startDate ? new Date(sprint.startDate) : null,
+              endDate: sprint.endDate ? new Date(sprint.endDate) : null,
+              owner: sprint.owners?.[0]?.name || sprint.creator?.name,
+              updatedAt: new Date(),
+            },
+            create: {
+              projectId: project.id,
+              yunxiaoId: sprint.id,
+              name: sprint.name,
+              status: mapStatus(sprint.status),
+              startDate: sprint.startDate ? new Date(sprint.startDate) : null,
+              endDate: sprint.endDate ? new Date(sprint.endDate) : null,
+              owner: sprint.owners?.[0]?.name || sprint.creator?.name,
+            },
+          });
+        }
+
+        // 更新同步日志
+        await prisma.syncLog.update({
+          where: { id: syncLog.id },
+          data: {
+            status: 'success',
+            recordCount: sprints.length,
+            completedAt: new Date(),
+          }
+        });
+
       } catch (error) {
         logger.error(`Failed to sync project ${project.name}:`, error);
+        
+        // 记录失败日志
+        await prisma.syncLog.create({
+          data: {
+            projectId: project.id,
+            source: 'yunxiao',
+            syncType: 'incremental',
+            status: 'failed',
+            errorMessage: (error as Error).message,
+            startedAt: new Date(),
+            completedAt: new Date(),
+          }
+        });
       }
     }
 
     logger.info(`[Cron] Completed sync for ${projects.length} projects`);
   } catch (error) {
     logger.error('[Cron] Failed to sync all projects:', error);
-  }
-}
-
-/**
- * 同步单个项目
- */
-async function syncProject(projectId: number, yunxiaoProjectId: string) {
-  // 记录同步日志
-  const syncLog = await prisma.syncLog.create({
-    data: {
-      projectId,
-      source: 'yunxiao',
-      syncType: 'incremental',
-      status: 'running',
-      startedAt: new Date(),
-    }
-  });
-
-  try {
-    // 获取云效数据
-    const data = await yunxiaoService.syncProjectData(yunxiaoProjectId);
-
-    // 更新需求和缺陷数据...
-    // （实际同步逻辑已在 sync.ts 中实现）
-
-    // 更新同步日志
-    await prisma.syncLog.update({
-      where: { id: syncLog.id },
-      data: {
-        status: 'success',
-        recordCount: data.demands.length + data.bugs.length,
-        completedAt: new Date(),
-      }
-    });
-
-  } catch (error) {
-    await prisma.syncLog.update({
-      where: { id: syncLog.id },
-      data: {
-        status: 'failed',
-        errorMessage: (error as Error).message,
-        completedAt: new Date(),
-      }
-    });
-    throw error;
   }
 }
 
@@ -167,6 +182,9 @@ async function fullSyncAllProjects() {
       if (!project.yunxiaoProjectId) continue;
 
       try {
+        // 使用现有的云效服务函数获取冲刺数据
+        const sprints = await yunxiaoService.getIterations(project.yunxiaoProjectId);
+        
         // 记录全量同步日志
         const syncLog = await prisma.syncLog.create({
           data: {
@@ -178,20 +196,55 @@ async function fullSyncAllProjects() {
           }
         });
 
-        // 执行同步
-        await syncProject(project.id, project.yunxiaoProjectId);
+        // 保存冲刺数据到数据库
+        for (const sprint of sprints) {
+          await prisma.iteration.upsert({
+            where: { yunxiaoId: sprint.id },
+            update: {
+              name: sprint.name,
+              status: mapStatus(sprint.status),
+              startDate: sprint.startDate ? new Date(sprint.startDate) : null,
+              endDate: sprint.endDate ? new Date(sprint.endDate) : null,
+              owner: sprint.owners?.[0]?.name || sprint.creator?.name,
+              updatedAt: new Date(),
+            },
+            create: {
+              projectId: project.id,
+              yunxiaoId: sprint.id,
+              name: sprint.name,
+              status: mapStatus(sprint.status),
+              startDate: sprint.startDate ? new Date(sprint.startDate) : null,
+              endDate: sprint.endDate ? new Date(sprint.endDate) : null,
+              owner: sprint.owners?.[0]?.name || sprint.creator?.name,
+            },
+          });
+        }
 
-        // 更新为成功
+        // 更新同步日志
         await prisma.syncLog.update({
           where: { id: syncLog.id },
           data: {
             status: 'success',
+            recordCount: sprints.length,
             completedAt: new Date(),
           }
         });
 
       } catch (error) {
         logger.error(`Full sync failed for project ${project.name}:`, error);
+        
+        // 记录失败日志
+        await prisma.syncLog.create({
+          data: {
+            projectId: project.id,
+            source: 'yunxiao',
+            syncType: 'full',
+            status: 'failed',
+            errorMessage: (error as Error).message,
+            startedAt: new Date(),
+            completedAt: new Date(),
+          }
+        });
       }
     }
 
@@ -199,6 +252,17 @@ async function fullSyncAllProjects() {
   } catch (error) {
     logger.error('[Cron] Failed to full sync all projects:', error);
   }
+}
+
+// 状态映射函数
+function mapStatus(yunxiaoStatus: string): string {
+  const statusMap: Record<string, string> = {
+    'TODO': 'todo',
+    'DOING': 'doing',
+    'DONE': 'done',
+    'CLOSED': 'closed',
+  };
+  return statusMap[yunxiaoStatus] || yunxiaoStatus.toLowerCase();
 }
 
 export default {
