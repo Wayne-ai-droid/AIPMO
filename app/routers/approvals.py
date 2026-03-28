@@ -46,33 +46,36 @@ def get_feishu_approvals(access_token: str, user_id: str, days: int = 7):
     """
     调用飞书API获取审批列表
     
-    文档: https://open.feishu.cn/document/server-docs/approval-v4/approval-instance/list
+    文档: https://open.feishu.cn/document/server-docs/approval-v4/task/query
+    注意：获取待办任务列表需要使用 /approval/v4/tasks 接口
     """
     base_url = "https://open.feishu.cn/open-apis"
     
-    # 计算时间范围
-    end_time = datetime.now()
-    start_time = end_time - timedelta(days=days)
+    # 【重要】使用正确的API端点：获取待办任务列表
+    # 文档：https://open.feishu.cn/document/server-docs/approval-v4/task/query
+    url = f"{base_url}/approval/v4/tasks"
     
-    url = f"{base_url}/approval/v4/instances"
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
     
-    # 查询待审批的任务
+    # 查询参数
     params = {
         "user_id": user_id,
-        "status": "PENDING",
         "page_size": 100
     }
     
     try:
         logger.info(f"调用飞书API: {url}")
+        logger.info(f"Headers: Authorization=Bearer {access_token[:20]}...")
+        logger.info(f"Params: {params}")
+        
         response = requests.get(url, headers=headers, params=params, timeout=10)
         result = response.json()
         
-        logger.info(f"飞书API响应: {result.get('code')}")
+        logger.info(f"飞书API响应状态码: {response.status_code}")
+        logger.info(f"飞书API响应: {result}")
         
         if result.get('code') == 0:
             data = result.get('data', {})
@@ -96,11 +99,14 @@ def get_feishu_approvals(access_token: str, user_id: str, days: int = 7):
             logger.info(f"获取到 {len(approvals)} 条审批")
             return approvals
         else:
-            logger.error(f"飞书API调用失败: {result}")
-            return None
+            logger.error(f"飞书API调用失败: code={result.get('code')}, msg={result.get('msg')}")
+            # 返回错误信息用于调试
+            return {"error": result}
             
     except Exception as e:
         logger.error(f"调用飞书API异常: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 
@@ -127,16 +133,31 @@ async def get_approvals(
     
     # 如果有access_token，尝试调用飞书API
     if access_token:
-        logger.info("尝试调用飞书API获取真实数据...")
-        feishu_data = get_feishu_approvals(access_token, user_id, days)
+        logger.info(f"尝试调用飞书API获取真实数据... token前20位: {access_token[:20]}")
+        feishu_result = get_feishu_approvals(access_token, user_id, days)
         
-        if feishu_data is not None:
+        # 检查返回结果
+        if isinstance(feishu_result, list):
+            # 成功获取数据
             return {
                 "code": 0,
                 "msg": "success",
-                "data": feishu_data,
-                "total": len(feishu_data),
+                "data": feishu_result,
+                "total": len(feishu_result),
                 "source": "feishu_api"
+            }
+        elif isinstance(feishu_result, dict) and "error" in feishu_result:
+            # API返回错误，显示错误信息
+            error_info = feishu_result["error"]
+            logger.warning(f"飞书API返回错误: {error_info}")
+            return {
+                "code": 0,  # 仍然返回200，但标注是模拟数据
+                "msg": "success",
+                "data": MOCK_APPROVALS,
+                "total": len(MOCK_APPROVALS),
+                "source": "mock",
+                "error_detail": error_info,
+                "note": "飞书API调用失败，显示模拟数据。请检查应用权限或token有效性。"
             }
         else:
             logger.warning("飞书API调用失败，返回模拟数据")
