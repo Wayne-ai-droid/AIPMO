@@ -173,46 +173,65 @@ async def auth_logout(request: Request):
 
 
 @router.get("/auth/exchange")
-async def auth_exchange(code: str):
+async def auth_exchange(code: str, request: Request):
     """
     用short_code换取access_token
     """
+    logger.info(f"收到exchange请求，code: {code}")
+    
     if not OAUTH_AVAILABLE:
+        logger.error("OAuth服务未启用")
         return JSONResponse({
             "code": 500,
             "message": "OAuth服务未启用"
         })
     
-    oauth = get_feishu_oauth()
-    temp_tokens = getattr(oauth, '_temp_tokens', {})
-    
-    if code not in temp_tokens:
-        return JSONResponse({
-            "code": 400,
-            "message": "无效的code或已过期"
-        })
-    
-    token_data = temp_tokens[code]
-    
-    # 检查是否过期（5分钟）
-    if time.time() - token_data['created_at'] > 300:
+    try:
+        oauth = get_feishu_oauth()
+        temp_tokens = getattr(oauth, '_temp_tokens', {})
+        
+        logger.info(f"当前temp_tokens数量: {len(temp_tokens)}")
+        
+        if code not in temp_tokens:
+            logger.error(f"Code不存在: {code}")
+            return JSONResponse({
+                "code": 400,
+                "message": "无效的code或已过期"
+            })
+        
+        token_data = temp_tokens[code]
+        
+        # 检查是否过期（5分钟）
+        import time
+        if time.time() - token_data['created_at'] > 300:
+            del temp_tokens[code]
+            logger.error(f"Code已过期: {code}")
+            return JSONResponse({
+                "code": 400,
+                "message": "code已过期"
+            })
+        
+        # 返回token
+        response_data = {
+            "code": 0,
+            "access_token": token_data['token'],
+            "user_id": token_data['user_id']
+        }
+        
+        # 删除已使用的code
         del temp_tokens[code]
+        
+        logger.info(f"Token换取成功，user_id: {token_data['user_id']}")
+        return JSONResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"exchange接口异常: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return JSONResponse({
-            "code": 400,
-            "message": "code已过期"
+            "code": 500,
+            "message": f"服务器错误: {str(e)}"
         })
-    
-    # 返回token
-    response_data = {
-        "code": 0,
-        "access_token": token_data['token'],
-        "user_id": token_data['user_id']
-    }
-    
-    # 删除已使用的code
-    del temp_tokens[code]
-    
-    return JSONResponse(response_data)
 async def auth_test():
     """测试接口"""
     return JSONResponse({
