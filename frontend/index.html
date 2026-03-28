@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>飞书审批助手 - 我的审批</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        
+        .header .date-range {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s;
+            color: #666;
+        }
+        
+        .tab:hover {
+            background: #f0f0f0;
+        }
+        
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-align: center;
+        }
+        
+        .stat-card .number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card .label {
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .approval-list {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .list-header {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .list-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .refresh-btn {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .refresh-btn:hover {
+            background: #5a6fd6;
+        }
+        
+        .approval-item {
+            padding: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.3s;
+        }
+        
+        .approval-item:hover {
+            background: #fafafa;
+        }
+        
+        .approval-item:last-child {
+            border-bottom: none;
+        }
+        
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+        
+        .item-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .item-type {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .type-pending {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .type-approved {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        
+        .type-rejected {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+        
+        .item-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .item-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 6px 16px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        
+        .btn:hover {
+            background: #f5f5f5;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .btn-primary:hover {
+            background: #5a6fd6;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .empty {
+            text-align: center;
+            padding: 60px;
+            color: #999;
+        }
+        
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #d32f2f;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 飞书审批助手</h1>
+            <div class="date-range">最近7天: <span id="dateRange">--</span></div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('all')">全部</button>
+            <button class="tab" onclick="switchTab('initiated')">我发起的</button>
+            <button class="tab" onclick="switchTab('processing')">我办理的</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="number" id="totalCount">0</div>
+                <div class="label">全部审批</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="pendingCount">0</div>
+                <div class="label">待处理</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="initiatedCount">0</div>
+                <div class="label">我发起的</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" id="processingCount">0</div>
+                <div class="label">我办理的</div>
+            </div>
+        </div>
+        
+        <div class="approval-list">
+            <div class="list-header">
+                <h2>审批列表</h2>
+                <button class="refresh-btn" onclick="loadData()">🔄 刷新</button>
+            </div>
+            <div id="approvalList">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 配置（从 config.json 加载）
+        let CONFIG = {
+            API_BASE_URL: 'http://localhost:8000',
+            USER_ID: '',
+            DAYS: 7
+        };
+
+        let currentTab = 'all';
+        let approvalData = [];
+
+        // 初始化 - 先加载配置
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadConfig();
+            updateDateRange();
+            loadData();
+        });
+
+        // 加载配置文件
+        async function loadConfig() {
+            try {
+                const response = await fetch('./config.json');
+                if (response.ok) {
+                    const config = await response.json();
+                    CONFIG = { ...CONFIG, ...config };
+                    console.log('配置加载成功:', CONFIG);
+                } else {
+                    console.warn('配置文件加载失败，使用默认配置');
+                }
+            } catch (error) {
+                console.warn('配置文件不存在，使用默认配置:', error);
+            }
+        }
+
+        // 更新日期范围显示
+        function updateDateRange() {
+            const end = new Date();
+            const start = new Date();
+            start.setDate(start.getDate() - CONFIG.DAYS);
+            
+            const format = (date) => {
+                return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+            };
+            
+            document.getElementById('dateRange').textContent = `${format(start)} ~ ${format(end)}`;
+        }
+
+        // 切换标签
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // 更新标签样式
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 刷新列表
+            renderList();
+        }
+
+        // 加载数据
+        async function loadData() {
+            const listContainer = document.getElementById('approvalList');
+            listContainer.innerHTML = '<div class="loading">加载中...</div>';
+            
+            try {
+                // 调用后端API获取审批数据
+                const response = await fetch(`${CONFIG.API_BASE_URL}/api/approvals?days=${CONFIG.DAYS}&user_id=${CONFIG.USER_ID}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                approvalData = data.data || [];
+                
+                updateStats();
+                renderList();
+                
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                listContainer.innerHTML = `
+                    <div class="error">
+                        <strong>加载失败</strong><br>
+                        ${error.message}<br>
+                        <small>请检查后端服务是否正常运行</small>
+                    </div>
+                `;
+            }
+        }
+
+        // 更新统计数据
+        function updateStats() {
+            const total = approvalData.length;
+            const pending = approvalData.filter(item => item.status === 'PENDING').length;
+            const initiated = approvalData.filter(item => item.initiator_id === CONFIG.USER_ID).length;
+            const processing = approvalData.filter(item => item.processor_id === CONFIG.USER_ID).length;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('initiatedCount').textContent = initiated;
+            document.getElementById('processingCount').textContent = processing;
+        }
+
+        // 渲染列表
+        function renderList() {
+            const listContainer = document.getElementById('approvalList');
+            
+            // 根据当前标签过滤数据
+            let filteredData = approvalData;
+            if (currentTab === 'initiated') {
+                filteredData = approvalData.filter(item => item.initiator_id === CONFIG.USER_ID);
+            } else if (currentTab === 'processing') {
+                filteredData = approvalData.filter(item => item.processor_id === CONFIG.USER_ID);
+            }
+            
+            if (filteredData.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="empty">
+                        <div class="empty-icon">📭</div>
+                        <div>暂无审批记录</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const html = filteredData.map(item => {
+                const statusClass = item.status === 'PENDING' ? 'type-pending' : 
+                                   item.status === 'APPROVED' ? 'type-approved' : 'type-rejected';
+                const statusText = item.status === 'PENDING' ? '待审批' : 
+                                  item.status === 'APPROVED' ? '已同意' : '已拒绝';
+                
+                return `
+                    <div class="approval-item">
+                        <div class="item-header">
+                            <div>
+                                <div class="item-title">${item.title || '审批申请'}</div>
+                                <span class="item-type ${statusClass}">${statusText}</span>
+                            </div>
+                        </div>
+                        <div class="item-meta">
+                            <span>👤 发起人: ${item.initiator_name || '-'}</span>
+                            <span>📅 ${formatDate(item.create_time)}</span>
+                            <span>📝 ${item.form_name || '-'}</span>
+                        </div>
+                        <div class="item-actions">
+                            <button class="btn" onclick="viewDetail('${item.instance_code}')">查看详情</button>
+                            ${item.status === 'PENDING' ? `<button class="btn btn-primary" onclick="aiAnalyze('${item.instance_code}')">🤖 AI分析</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            listContainer.innerHTML = html;
+        }
+
+        // 格式化日期
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return `${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+        }
+
+        // 查看详情
+        function viewDetail(instanceCode) {
+            alert(`查看审批详情: ${instanceCode}\n\n实际项目中这里会打开详情弹窗或页面`);
+        }
+
+        // AI分析
+        function aiAnalyze(instanceCode) {
+            alert(`AI分析审批: ${instanceCode}\n\n实际项目中这里会调用AI分析接口`);
+        }
+    </script>
+</body>
+</html>
