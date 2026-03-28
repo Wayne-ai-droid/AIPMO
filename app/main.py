@@ -23,11 +23,12 @@ app.add_middleware(
 )
 
 # 导入路由
-from app.routers import webhook, approvals
+from app.routers import webhook, approvals, auth
 
 # 注册路由
 app.include_router(webhook.router, prefix="/webhook")
 app.include_router(approvals.router, prefix="/api")
+app.include_router(auth.router)  # OAuth路由不需要前缀
 
 @app.get("/")
 async def root():
@@ -35,7 +36,9 @@ async def root():
         "message": "飞书审批助手服务运行中",
         "version": "1.0.0",
         "status": "ok",
-        "docs": "/docs"
+        "docs": "/docs",
+        "auth_url": "/auth/login",
+        "api_base": "/api"
     }
 
 @app.get("/health")
