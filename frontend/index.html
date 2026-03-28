@@ -204,7 +204,7 @@
         let currentTab = 'all';
         let isAuthorized = false;
         
-        // 页面加载时检查授权状态（包括URL参数）
+        // 页面加载时检查授权状态（包括URL参数和localStorage）
         document.addEventListener('DOMContentLoaded', async function() {
             // 先检查URL是否有授权成功标记
             const urlParams = new URLSearchParams(window.location.search);
@@ -213,20 +213,53 @@
             const urlUserName = urlParams.get('name');
             
             if (authSuccess === 'success' && urlUserId) {
-                // URL中有授权成功标记，显示成功状态
+                // URL中有授权成功标记，保存到localStorage
+                localStorage.setItem('auth_user_id', urlUserId);
+                localStorage.setItem('auth_user_name', urlUserName || '已授权用户');
+                localStorage.setItem('auth_time', Date.now().toString());
+                
                 isAuthorized = true;
                 showAuthorized({
                     open_id: urlUserId,
-                    name: urlUserName || '已授权用户'
+                    name: decodeURIComponent(urlUserName || '已授权用户')
                 });
+                
                 // 清理URL参数
                 window.history.replaceState({}, document.title, window.location.pathname);
+                
                 // 加载数据
                 loadData();
                 return;
             }
             
-            // 否则检查cookie中的授权状态
+            // 检查localStorage中是否有授权信息
+            const storedUserId = localStorage.getItem('auth_user_id');
+            const storedAuthTime = localStorage.getItem('auth_time');
+            
+            if (storedUserId && storedAuthTime) {
+                // 检查是否过期（2小时）
+                const authTime = parseInt(storedAuthTime);
+                const now = Date.now();
+                const twoHours = 2 * 60 * 60 * 1000;
+                
+                if (now - authTime < twoHours) {
+                    // 授权有效
+                    isAuthorized = true;
+                    showAuthorized({
+                        open_id: storedUserId,
+                        name: localStorage.getItem('auth_user_name') || '已授权用户'
+                    });
+                    loadData();
+                    return;
+                } else {
+                    // 已过期，清除
+                    localStorage.removeItem('auth_user_id');
+                    localStorage.removeItem('auth_user_name');
+                    localStorage.removeItem('auth_time');
+                }
+            }
+            
+            // 否则检查后端状态
             await checkAuthStatus();
         });
         
@@ -286,15 +319,23 @@
         
         // 退出登录
         async function logout() {
+            // 清除localStorage
+            localStorage.removeItem('auth_user_id');
+            localStorage.removeItem('auth_user_name');
+            localStorage.removeItem('auth_time');
+            
+            // 调用后端登出
             try {
                 await fetch(`${API_BASE}/auth/logout`, {
                     method: 'POST',
                     credentials: 'include'
                 });
-                checkAuthStatus();
             } catch (error) {
-                console.error('退出失败:', error);
+                console.error('后端登出失败:', error);
             }
+            
+            // 刷新页面
+            window.location.reload();
         }
         
         // 切换标签
