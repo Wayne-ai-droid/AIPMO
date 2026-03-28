@@ -204,8 +204,31 @@
         let currentTab = 'all';
         let isAuthorized = false;
         
-        // 页面加载时检查授权状态
-        document.addEventListener('DOMContentLoaded', checkAuthStatus);
+        // 页面加载时检查授权状态（包括URL参数）
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 先检查URL是否有授权成功标记
+            const urlParams = new URLSearchParams(window.location.search);
+            const authSuccess = urlParams.get('auth');
+            const urlUserId = urlParams.get('user_id');
+            const urlUserName = urlParams.get('name');
+            
+            if (authSuccess === 'success' && urlUserId) {
+                // URL中有授权成功标记，显示成功状态
+                isAuthorized = true;
+                showAuthorized({
+                    open_id: urlUserId,
+                    name: urlUserName || '已授权用户'
+                });
+                // 清理URL参数
+                window.history.replaceState({}, document.title, window.location.pathname);
+                // 加载数据
+                loadData();
+                return;
+            }
+            
+            // 否则检查cookie中的授权状态
+            await checkAuthStatus();
+        });
         
         // 检查授权状态
         async function checkAuthStatus() {
