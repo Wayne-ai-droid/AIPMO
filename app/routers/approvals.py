@@ -133,12 +133,10 @@ async def get_approvals(
     
     # 如果有access_token，尝试调用飞书API
     if access_token:
-        logger.info(f"尝试调用飞书API获取真实数据... token前20位: {access_token[:20]}")
+        logger.info(f"尝试调用飞书API... token: {access_token[:20]}...")
         feishu_result = get_feishu_approvals(access_token, user_id, days)
         
-        # 检查返回结果
-        if isinstance(feishu_result, list):
-            # 成功获取数据
+        if isinstance(feishu_result, list) and len(feishu_result) > 0:
             return {
                 "code": 0,
                 "msg": "success",
@@ -147,30 +145,18 @@ async def get_approvals(
                 "source": "feishu_api"
             }
         elif isinstance(feishu_result, dict) and "error" in feishu_result:
-            # API返回错误，显示错误信息
             error_info = feishu_result["error"]
-            logger.warning(f"飞书API返回错误: {error_info}")
-            return {
-                "code": 0,  # 仍然返回200，但标注是模拟数据
-                "msg": "success",
-                "data": MOCK_APPROVALS,
-                "total": len(MOCK_APPROVALS),
-                "source": "mock",
-                "error_detail": error_info,
-                "note": "飞书API调用失败，显示模拟数据。请检查应用权限或token有效性。"
-            }
-        else:
-            logger.warning("飞书API调用失败，返回模拟数据")
+            logger.error(f"飞书API错误: {error_info}")
     
-    # 返回模拟数据
-    logger.info("返回模拟数据")
+    # 无论是否有token，都返回模拟数据用于测试
+    logger.info("返回模拟数据用于展示")
     return {
         "code": 0,
         "msg": "success",
         "data": MOCK_APPROVALS,
         "total": len(MOCK_APPROVALS),
         "source": "mock",
-        "note": "未提供有效access_token，显示模拟数据"
+        "debug": {"has_token": !!access_token, "user_id": user_id}
     }
 
 
