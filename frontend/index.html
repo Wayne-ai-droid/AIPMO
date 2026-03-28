@@ -346,9 +346,19 @@
             renderList();
         }
         
+        // 当前用户ID
+        let currentUserId = null;
+        
         // 加载数据
         async function loadData() {
             if (!isAuthorized) {
+                showUnauthorized();
+                return;
+            }
+            
+            // 从localStorage获取用户ID
+            currentUserId = localStorage.getItem('auth_user_id');
+            if (!currentUserId) {
                 showUnauthorized();
                 return;
             }
@@ -357,7 +367,7 @@
             listContainer.innerHTML = '<div class="loading">加载中...</div>';
             
             try {
-                const response = await fetch(`${API_BASE}/api/approvals?days=7`, {
+                const response = await fetch(`${API_BASE}/api/approvals?days=7&user_id=${currentUserId}`, {
                     credentials: 'include'
                 });
                 const data = await response.json();
