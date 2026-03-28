@@ -213,15 +213,27 @@
             const urlUserName = urlParams.get('name');
             
             if (authSuccess === 'success' && urlUserId) {
-                // URL中有授权成功标记，保存到localStorage
+                // URL中有授权成功标记
                 localStorage.setItem('auth_user_id', urlUserId);
                 localStorage.setItem('auth_user_name', urlUserName || '已授权用户');
                 localStorage.setItem('auth_time', Date.now().toString());
                 
-                // 保存access_token（用于API调用）
-                const urlToken = urlParams.get('token');
-                if (urlToken) {
-                    localStorage.setItem('auth_token', urlToken);
+                // 获取short_code并换取token
+                const shortCode = urlParams.get('code');
+                if (shortCode) {
+                    console.log('Debug - 获取到short_code:', shortCode);
+                    // 异步换取token
+                    fetch(`${API_BASE}/auth/exchange?code=${shortCode}`)
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.code === 0 && data.access_token) {
+                                localStorage.setItem('auth_token', data.access_token);
+                                console.log('Debug - Token已保存');
+                            } else {
+                                console.error('换取token失败:', data);
+                            }
+                        })
+                        .catch(err => console.error('换取token出错:', err));
                 }
                 
                 isAuthorized = true;

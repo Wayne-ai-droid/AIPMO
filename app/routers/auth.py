@@ -87,18 +87,30 @@ async def auth_callback(code: str, state: str, request: Request):
     
     user_id = token_info.get('open_id')
     user_name = token_info.get('name', '用户')
+    access_token = token_info.get('access_token', '')
     
     logger.info(f"用户 {user_name}({user_id}) 授权成功")
+    logger.info(f"Token长度: {len(access_token)}")
     
-    # 重定向到前端，带上完整授权信息（包括access_token）
+    # 将token临时存储在内存中，通过short_code传递给前端
+    import secrets
+    short_code = secrets.token_urlsafe(16)
+    if not hasattr(oauth, '_temp_tokens'):
+        oauth._temp_tokens = {}
+    oauth._temp_tokens[short_code] = {
+        'token': access_token,
+        'user_id': user_id,
+        'created_at': time.time()
+    }
+    
+    # 重定向到前端，只传递short_code（避免URL过长）
     import urllib.parse
-    access_token = token_info.get('access_token', '')
     frontend_callback = (
         f"http://localhost:8080?"
         f"auth=success"
         f"&user_id={user_id}"
         f"&name={urllib.parse.quote(user_name)}"
-        f"&token={access_token}"  # 传递完整access_token
+        f"&code={short_code}"  # 传递short_code而不是完整token
     )
     
     return RedirectResponse(url=frontend_callback)
@@ -160,7 +172,47 @@ async def auth_logout(request: Request):
     return response
 
 
-@router.get("/auth/test")
+@router.get("/auth/exchange")
+async def auth_exchange(code: str):
+    """
+    用short_code换取access_token
+    """
+    if not OAUTH_AVAILABLE:
+        return JSONResponse({
+            "code": 500,
+            "message": "OAuth服务未启用"
+        })
+    
+    oauth = get_feishu_oauth()
+    temp_tokens = getattr(oauth, '_temp_tokens', {})
+    
+    if code not in temp_tokens:
+        return JSONResponse({
+            "code": 400,
+            "message": "无效的code或已过期"
+        })
+    
+    token_data = temp_tokens[code]
+    
+    # 检查是否过期（5分钟）
+    if time.time() - token_data['created_at'] > 300:
+        del temp_tokens[code]
+        return JSONResponse({
+            "code": 400,
+            "message": "code已过期"
+        })
+    
+    # 返回token
+    response_data = {
+        "code": 0,
+        "access_token": token_data['token'],
+        "user_id": token_data['user_id']
+    }
+    
+    # 删除已使用的code
+    del temp_tokens[code]
+    
+    return JSONResponse(response_data)
 async def auth_test():
     """测试接口"""
     return JSONResponse({
