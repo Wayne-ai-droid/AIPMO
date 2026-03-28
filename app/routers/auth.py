@@ -19,28 +19,41 @@ except ImportError:
 
 
 @router.get("/auth/login")
-async def auth_login(request: Request):
+async def auth_login(request: Request, redirect_uri: str = None):
     """
     启动飞书OAuth授权流程
     
     用户访问此接口后，会被重定向到飞书授权页面
+    
+    参数:
+    - redirect_uri: 可选，前端传入的state标识（解决跨域cookie问题）
     """
     if not OAUTH_AVAILABLE:
         raise HTTPException(status_code=500, detail="OAuth服务未启用")
     
     oauth = get_feishu_oauth()
     
-    # 生成随机的state参数（存储在session或cookie中）
+    # 生成随机的state参数（包含时间戳防重放）
     state = oauth.generate_state()
     
-    # 生成授权URL
-    auth_url = oauth.get_auth_url(state)
+    # 将state存储在内存中（替代cookie方案）
+    # 使用redirect_uri作为key来关联state
+    callback_key = redirect_uri or "default"
+    oauth._pending_states = getattr(oauth, '_pending_states', {})
+    oauth._pending_states[callback_key] = {
+        'state': state,
+        'created_at': __import__('datetime').datetime.now()
+    }
     
-    # 将state存储在cookie中（简单实现，生产环境应使用session）
+    # 生成授权URL，把callback_key编码到state中
+    combined_state = f"{callback_key}:{state}"
+    auth_url = oauth.get_auth_url(combined_state)
+    
+    # 仍然设置cookie作为备用方案
     response = RedirectResponse(url=auth_url)
-    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600)
+    response.set_cookie(key="oauth_state", value=state, httponly=True, max_age=600, samesite='lax')
     
-    logger.info(f"启动OAuth授权流程，state: {state}")
+    logger.info(f"启动OAuth授权流程，state: {state}, key: {callback_key}")
     return response
 
 
@@ -52,18 +65,44 @@ async def auth_callback(code: str, state: str, request: Request):
     用户授权后，飞书会重定向到此接口
     参数:
     - code: 授权码
-    - state: 状态参数（防止CSRF）
+    - state: 状态参数（包含callback_key:state格式）
     """
     if not OAUTH_AVAILABLE:
         raise HTTPException(status_code=500, detail="OAuth服务未启用")
     
-    # 验证state（防止CSRF攻击）
-    cookie_state = request.cookies.get("oauth_state")
-    if not cookie_state or cookie_state != state:
-        logger.error(f"State验证失败: cookie={cookie_state}, param={state}")
+    oauth = get_feishu_oauth()
+    
+    # 解析state（格式: callback_key:actual_state）
+    if ':' in state:
+        callback_key, actual_state = state.split(':', 1)
+    else:
+        callback_key = "default"
+        actual_state = state
+    
+    # 验证state（先从内存查找，再从cookie备用）
+    valid_state = None
+    pending_states = getattr(oauth, '_pending_states', {})
+    
+    if callback_key in pending_states:
+        stored = pending_states[callback_key]
+        # 检查是否过期（10分钟）
+        time_diff = __import__('datetime').datetime.now() - stored['created_at']
+        if time_diff.total_seconds() < 600:
+            valid_state = stored['state']
+    
+    # 如果内存中没有，尝试从cookie获取（备用方案）
+    if not valid_state:
+        cookie_state = request.cookies.get("oauth_state")
+        if cookie_state:
+            valid_state = cookie_state
+    
+    if not valid_state or valid_state != actual_state:
+        logger.error(f"State验证失败: stored={valid_state}, received={actual_state}")
         raise HTTPException(status_code=400, detail="Invalid state parameter")
     
-    oauth = get_feishu_oauth()
+    # 清理已使用的state
+    if callback_key in pending_states:
+        del pending_states[callback_key]
     
     # 用授权码换取访问令牌
     token_info = oauth.exchange_code_for_token(code)
@@ -74,7 +113,7 @@ async def auth_callback(code: str, state: str, request: Request):
     # 重定向到前端页面，并带上用户ID
     user_id = token_info.get('open_id')
     
-    # 构造前端回调URL（可以自定义）
+    # 构造前端回调URL
     frontend_callback = f"http://localhost:8080?auth=success&user_id={user_id}"
     
     response = RedirectResponse(url=frontend_callback)
@@ -83,7 +122,7 @@ async def auth_callback(code: str, state: str, request: Request):
     response.delete_cookie(key="oauth_state")
     
     # 将用户ID存储在cookie中（用于后续识别）
-    response.set_cookie(key="user_id", value=user_id, httponly=True, max_age=7200)
+    response.set_cookie(key="user_id", value=user_id, httponly=True, max_age=7200, samesite='lax')
     
     logger.info(f"用户 {user_id} 授权成功，重定向到前端")
     return response

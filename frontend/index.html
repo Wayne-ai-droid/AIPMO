@@ -251,9 +251,14 @@
             document.getElementById('userStatus').textContent = '已授权';
         }
         
-        // 开始授权
+        // 开始授权 - 使用URL参数方案避免cookie跨域问题
         function startAuth() {
-            window.location.href = `${API_BASE}/auth/login`;
+            // 生成一个随机的key，用于关联state
+            const key = 'auth_' + Math.random().toString(36).substring(2, 15);
+            // 存储在sessionStorage中
+            sessionStorage.setItem('oauth_key', key);
+            // 跳转到授权接口，带上key参数
+            window.location.href = `${API_BASE}/auth/login?redirect_uri=${encodeURIComponent(key)}`;
         }
         
         // 退出登录
