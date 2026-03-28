@@ -156,7 +156,7 @@ async def get_approvals(
         "data": MOCK_APPROVALS,
         "total": len(MOCK_APPROVALS),
         "source": "mock",
-        "debug": {"has_token": !!access_token, "user_id": user_id}
+        "debug": {"has_token": bool(access_token), "user_id": user_id}
     }
 
 
