@@ -1,9 +1,9 @@
 """审批数据API路由"""
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Header
 from typing import List, Optional
 from datetime import datetime, timedelta
 import logging
-import os
+import requests
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -14,13 +14,6 @@ try:
     FEISHU_API_AVAILABLE = True
 except ImportError:
     FEISHU_API_AVAILABLE = False
-
-try:
-    from app.services.feishu_oauth import get_feishu_oauth
-    OAUTH_AVAILABLE = True
-except ImportError:
-    OAUTH_AVAILABLE = False
-
 
 # 模拟数据（用于测试或API不可用时）
 MOCK_APPROVALS = [
@@ -49,29 +42,114 @@ MOCK_APPROVALS = [
 ]
 
 
+def get_feishu_approvals(access_token: str, user_id: str, days: int = 7):
+    """
+    调用飞书API获取审批列表
+    
+    文档: https://open.feishu.cn/document/server-docs/approval-v4/approval-instance/list
+    """
+    base_url = "https://open.feishu.cn/open-apis"
+    
+    # 计算时间范围
+    end_time = datetime.now()
+    start_time = end_time - timedelta(days=days)
+    
+    url = f"{base_url}/approval/v4/instances"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+    
+    # 查询待审批的任务
+    params = {
+        "user_id": user_id,
+        "status": "PENDING",
+        "page_size": 100
+    }
+    
+    try:
+        logger.info(f"调用飞书API: {url}")
+        response = requests.get(url, headers=headers, params=params, timeout=10)
+        result = response.json()
+        
+        logger.info(f"飞书API响应: {result.get('code')}")
+        
+        if result.get('code') == 0:
+            data = result.get('data', {})
+            items = data.get('items', [])
+            
+            # 格式化数据
+            approvals = []
+            for item in items:
+                approval = {
+                    "instance_code": item.get('instance_code'),
+                    "title": item.get('approval_name', '审批申请'),
+                    "form_name": item.get('form_name', '审批'),
+                    "status": item.get('status', 'PENDING'),
+                    "initiator_id": item.get('user_id'),
+                    "initiator_name": item.get('user_name', '未知'),
+                    "create_time": item.get('create_time'),
+                    "update_time": item.get('update_time')
+                }
+                approvals.append(approval)
+            
+            logger.info(f"获取到 {len(approvals)} 条审批")
+            return approvals
+        else:
+            logger.error(f"飞书API调用失败: {result}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"调用飞书API异常: {e}")
+        return None
+
+
 @router.get("/approvals")
 async def get_approvals(
     request: Request,
     days: int = Query(7, description="最近几天"),
     user_id: str = Query(..., description="用户ID"),
-    status: Optional[str] = Query(None, description="状态过滤")
+    status: Optional[str] = Query(None, description="状态过滤"),
+    authorization: Optional[str] = Header(None, alias="Authorization")
 ):
     """
     获取审批列表
+    
+    如果提供了Authorization header，会尝试调用飞书API获取真实数据
     """
     logger.info(f"获取审批列表: user_id={user_id}, days={days}")
+    logger.info(f"Authorization header: {authorization[:30] if authorization else 'None'}...")
     
-    # 暂时跳过授权检查，直接返回模拟数据用于测试
-    # TODO: 后续连接真实飞书API
+    # 从header中提取token
+    access_token = None
+    if authorization and authorization.startswith("Bearer "):
+        access_token = authorization[7:]  # 去掉 "Bearer " 前缀
     
-    logger.info("返回模拟数据用于测试")
+    # 如果有access_token，尝试调用飞书API
+    if access_token:
+        logger.info("尝试调用飞书API获取真实数据...")
+        feishu_data = get_feishu_approvals(access_token, user_id, days)
+        
+        if feishu_data is not None:
+            return {
+                "code": 0,
+                "msg": "success",
+                "data": feishu_data,
+                "total": len(feishu_data),
+                "source": "feishu_api"
+            }
+        else:
+            logger.warning("飞书API调用失败，返回模拟数据")
+    
+    # 返回模拟数据
+    logger.info("返回模拟数据")
     return {
         "code": 0,
         "msg": "success",
         "data": MOCK_APPROVALS,
         "total": len(MOCK_APPROVALS),
         "source": "mock",
-        "debug": {"received_user_id": user_id}
+        "note": "未提供有效access_token，显示模拟数据"
     }
 
 

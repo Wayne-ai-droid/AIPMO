@@ -90,29 +90,18 @@ async def auth_callback(code: str, state: str, request: Request):
     
     logger.info(f"用户 {user_name}({user_id}) 授权成功")
     
-    # 重定向到前端，带上完整授权信息（URL参数方案，避免cookie跨域问题）
+    # 重定向到前端，带上完整授权信息（包括access_token）
     import urllib.parse
+    access_token = token_info.get('access_token', '')
     frontend_callback = (
         f"http://localhost:8080?"
         f"auth=success"
         f"&user_id={user_id}"
         f"&name={urllib.parse.quote(user_name)}"
-        f"&token={token_info.get('access_token', '')[:20]}"  # 只传前20位用于标识
+        f"&token={access_token}"  # 传递完整access_token
     )
     
-    response = RedirectResponse(url=frontend_callback)
-    
-    # 尝试设置cookie（可能因跨域失败）
-    response.set_cookie(
-        key="user_id", 
-        value=user_id, 
-        httponly=False,  # 允许JavaScript读取
-        max_age=7200, 
-        samesite='lax',
-        path='/'
-    )
-    
-    return response
+    return RedirectResponse(url=frontend_callback)
 
 
 @router.get("/auth/status")

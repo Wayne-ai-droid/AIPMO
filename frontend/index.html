@@ -218,6 +218,12 @@
                 localStorage.setItem('auth_user_name', urlUserName || '已授权用户');
                 localStorage.setItem('auth_time', Date.now().toString());
                 
+                // 保存access_token（用于API调用）
+                const urlToken = urlParams.get('token');
+                if (urlToken) {
+                    localStorage.setItem('auth_token', urlToken);
+                }
+                
                 isAuthorized = true;
                 showAuthorized({
                     open_id: urlUserId,
@@ -356,8 +362,10 @@
                 return;
             }
             
-            // 从localStorage获取用户ID
+            // 从localStorage获取用户ID和token
             currentUserId = localStorage.getItem('auth_user_id');
+            const accessToken = localStorage.getItem('auth_token');
+            
             if (!currentUserId) {
                 showUnauthorized();
                 return;
@@ -367,7 +375,18 @@
             listContainer.innerHTML = '<div class="loading">加载中...</div>';
             
             try {
+                // 准备headers
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                // 如果有access_token，添加到Authorization header
+                if (accessToken) {
+                    headers['Authorization'] = `Bearer ${accessToken}`;
+                }
+                
                 const response = await fetch(`${API_BASE}/api/approvals?days=7&user_id=${currentUserId}`, {
+                    headers: headers,
                     credentials: 'include'
                 });
                 const data = await response.json();
