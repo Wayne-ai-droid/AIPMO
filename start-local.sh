@@ -1,5 +1,5 @@
 #!/bin/bash
-# 飞书审批助手 - 本地启动脚本（修复版）
+# 飞书审批助手 - 本地启动脚本（自动清理端口版本）
 
 echo "=== 飞书审批助手 - 本地启动 ==="
 echo ""
@@ -23,6 +23,34 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
+# 【新增】清理已占用的端口
+echo "🧹 清理端口..."
+
+# 读取配置中的端口（默认8000）
+PORT=$(grep -E '^PORT=' .env | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+PORT=${PORT:-8000}
+
+# 关闭占用端口的进程
+if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo "   发现端口 $PORT 被占用，正在关闭..."
+    kill $(lsof -t -i:$PORT) 2>/dev/null
+    sleep 1
+    # 强制关闭（如果还在）
+    kill -9 $(lsof -t -i:$PORT) 2>/dev/null
+    echo "   ✅ 端口 $PORT 已释放"
+fi
+
+# 关闭前端端口（8080）
+if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo "   发现端口 8080 被占用，正在关闭..."
+    kill $(lsof -t -i:8080) 2>/dev/null
+    sleep 1
+    kill -9 $(lsof -t -i:8080) 2>/dev/null
+    echo "   ✅ 端口 8080 已释放"
+fi
+
+echo ""
+
 # 生成前端配置
 echo "📝 生成前端配置..."
 python3 generate_config.py
@@ -43,12 +71,11 @@ echo ""
 echo "=== 启动服务 ==="
 echo ""
 
-# 终端1：启动后端（使用模块方式运行，解决Mac导入问题）
+# 终端1：启动后端（使用模块方式运行）
 echo "🚀 启动后端服务..."
-echo "   地址: http://127.0.0.1:8000"
+echo "   地址: http://127.0.0.1:$PORT"
 echo ""
 
-# 在项目根目录使用模块方式运行
 nohup python3 -m app.main > logs/backend.log 2>&1 &
 BACKEND_PID=$!
 echo "✅ 后端已启动 (PID: $BACKEND_PID)"
@@ -57,7 +84,7 @@ echo "✅ 后端已启动 (PID: $BACKEND_PID)"
 sleep 3
 
 # 检查后端是否启动成功
-if ! curl -s http://127.0.0.1:8000/health > /dev/null 2>&1; then
+if ! curl -s http://127.0.0.1:$PORT/health > /dev/null 2>&1; then
     echo "⚠️  后端启动可能需要更多时间，请查看日志: logs/backend.log"
 fi
 
@@ -78,11 +105,12 @@ echo "=== 服务启动完成 ==="
 echo ""
 echo "📋 访问地址："
 echo "   前端页面: http://localhost:8080"
-echo "   后端API:  http://localhost:8000"
-echo "   API文档:  http://localhost:8000/docs"
+echo "   后端API:  http://localhost:$PORT"
+echo "   API文档:  http://localhost:$PORT/docs"
 echo ""
 echo "🛑 停止服务："
 echo "   kill $BACKEND_PID $FRONTEND_PID"
+echo "   或运行: ./stop-local.sh"
 echo ""
 echo "📁 日志文件："
 echo "   后端日志: logs/backend.log"
