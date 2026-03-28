@@ -35,47 +35,94 @@ MOCK_APPROVALS = [
 ]
 
 
-def test_feishu_api(access_token: str):
+def get_feishu_approvals(access_token: str, user_id: str, days: int = 7):
     """
-    测试飞书API连通性
+    调用飞书API获取用户的审批任务列表
     
-    使用 /approval/v4/approvals 获取审批定义列表（最简单的测试接口）
+    使用 POST /approval/v4/tasks/search 接口
+    文档: https://open.feishu.cn/document/server-docs/approval-v4/approval-search/search
     """
     base_url = "https://open.feishu.cn/open-apis"
-    url = f"{base_url}/approval/v4/approvals"
+    url = f"{base_url}/approval/v4/tasks/search"
     
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json; charset=utf-8"
+    }
+    
+    # 计算时间范围（毫秒时间戳）
+    end_time = int(datetime.now().timestamp() * 1000)
+    start_time = end_time - (days * 24 * 60 * 60 * 1000)
+    
+    # POST请求体
+    body = {
+        "user_id": user_id,
+        "task_status_list": ["PENDING"],  # 查询待审批任务
+        "task_start_time_from": str(start_time),
+        "task_start_time_to": str(end_time),
+        "page_size": 100,
+        "order": 2  # 按任务开始时间降序
     }
     
     try:
-        logger.info(f"测试飞书API连通性: {url}")
-        response = requests.get(url, headers=headers, timeout=10)
+        logger.info(f"调用飞书API: {url}")
+        logger.info(f"Headers: Authorization=Bearer {access_token[:20]}...")
+        logger.info(f"Body: {body}")
         
-        logger.info(f"响应状态码: {response.status_code}")
+        response = requests.post(url, headers=headers, json=body, timeout=10)
         
-        if response.status_code == 200:
-            try:
-                result = response.json()
-                if result.get('code') == 0:
-                    approval_list = result.get('data', {}).get('approval_list', [])
-                    logger.info(f"API测试成功，获取到 {len(approval_list)} 个审批定义")
-                    return {
-                        "success": True,
-                        "approval_count": len(approval_list),
-                        "approvals": approval_list[:5]  # 只返回前5个
-                    }
-                else:
-                    return {"success": False, "error": result.get('msg'), "code": result.get('code')}
-            except:
-                return {"success": False, "error": "解析响应失败"}
+        logger.info(f"飞书API响应状态码: {response.status_code}")
+        logger.info(f"飞书API响应内容类型: {response.headers.get('content-type')}")
+        
+        if response.status_code != 200:
+            logger.error(f"飞书API返回错误状态码: {response.status_code}")
+            logger.error(f"响应内容: {response.text[:500]}")
+            return {"error": {"status": response.status_code, "detail": response.text[:500]}}
+        
+        # 检查是否是JSON响应
+        if 'application/json' not in response.headers.get('content-type', ''):
+            logger.error(f"飞书API返回非JSON响应: {response.text[:500]}")
+            return {"error": {"msg": "API返回非JSON格式", "detail": response.text[:500]}}
+        
+        result = response.json()
+        
+        logger.info(f"飞书API响应code: {result.get('code')}")
+        
+        if result.get('code') == 0:
+            data = result.get('data', {})
+            task_list = data.get('task_list', [])
+            
+            # 格式化数据
+            approvals = []
+            for task_item in task_list:
+                approval_info = task_item.get('approval', {})
+                instance_info = task_item.get('instance', {})
+                task_info = task_item.get('task', {})
+                
+                approval = {
+                    "instance_code": instance_info.get('code', ''),
+                    "title": instance_info.get('title') or approval_info.get('name', '审批申请'),
+                    "form_name": approval_info.get('name', '审批'),
+                    "status": task_info.get('status', 'PENDING').upper(),
+                    "initiator_id": instance_info.get('user_id', ''),
+                    "initiator_name": "未知",  # 需要额外查询
+                    "create_time": instance_info.get('start_time'),
+                    "update_time": task_info.get('update_time'),
+                    "task_id": task_info.get('task_id', '')
+                }
+                approvals.append(approval)
+            
+            logger.info(f"获取到 {len(approvals)} 条审批任务")
+            return approvals
         else:
-            return {"success": False, "error": f"HTTP {response.status_code}", "detail": response.text[:200]}
+            logger.error(f"飞书API调用失败: code={result.get('code')}, msg={result.get('msg')}")
+            return {"error": {"code": result.get('code'), "msg": result.get('msg'), "full_response": result}}
             
     except Exception as e:
-        logger.error(f"API测试异常: {e}")
-        return {"success": False, "error": str(e)}
+        logger.error(f"调用飞书API异常: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return {"error": {"msg": str(e)}}
 
 
 @router.get("/approvals")
@@ -88,6 +135,8 @@ async def get_approvals(
 ):
     """
     获取审批列表
+    
+    如果提供了Authorization header，会尝试调用飞书API获取真实数据
     """
     logger.info(f"获取审批列表: user_id={user_id}, days={days}")
     logger.info(f"Authorization header: {authorization[:30] if authorization else 'None'}...")
@@ -97,23 +146,42 @@ async def get_approvals(
     if authorization and authorization.startswith("Bearer "):
         access_token = authorization[7:]
     
-    api_test_result = None
-    
-    # 测试飞书API连通性
+    # 如果有access_token，尝试调用飞书API
     if access_token:
-        logger.info("测试飞书API连通性...")
-        api_test_result = test_feishu_api(access_token)
-        logger.info(f"API测试结果: {api_test_result}")
+        logger.info(f"尝试调用飞书API... token: {access_token[:20]}...")
+        feishu_result = get_feishu_approvals(access_token, user_id, days)
+        
+        if isinstance(feishu_result, list) and len(feishu_result) > 0:
+            return {
+                "code": 0,
+                "msg": "success",
+                "data": feishu_result,
+                "total": len(feishu_result),
+                "source": "feishu_api"
+            }
+        elif isinstance(feishu_result, dict) and "error" in feishu_result:
+            error_info = feishu_result["error"]
+            logger.error(f"飞书API错误: {error_info}")
+            # 返回模拟数据，但显示错误信息
+            return {
+                "code": 0,
+                "msg": "success",
+                "data": MOCK_APPROVALS,
+                "total": len(MOCK_APPROVALS),
+                "source": "mock",
+                "error_detail": error_info,
+                "note": "飞书API调用失败，显示模拟数据"
+            }
     
-    # 目前返回模拟数据，但附带API测试结果
+    # 返回模拟数据
+    logger.info("返回模拟数据")
     return {
         "code": 0,
         "msg": "success",
         "data": MOCK_APPROVALS,
         "total": len(MOCK_APPROVALS),
         "source": "mock",
-        "api_test": api_test_result,
-        "note": "已获取access_token并测试API连通性。如需真实数据，需进一步完善API调用逻辑。"
+        "note": "未提供有效access_token或API调用失败，显示模拟数据"
     }
 
 
