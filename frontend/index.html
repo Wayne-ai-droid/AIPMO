@@ -367,6 +367,10 @@
             currentUserId = localStorage.getItem('auth_user_id');
             const accessToken = localStorage.getItem('auth_token');
             
+            console.log('Debug - user_id:', currentUserId);
+            console.log('Debug - token exists:', !!accessToken);
+            console.log('Debug - token first 20 chars:', accessToken ? accessToken.substring(0, 20) : 'none');
+            
             if (!currentUserId) {
                 showUnauthorized();
                 return;
@@ -377,20 +381,27 @@
             
             try {
                 // 准备headers
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
+                const headers = {};
                 
                 // 如果有access_token，添加到Authorization header
                 if (accessToken) {
-                    headers['Authorization'] = `Bearer ${accessToken}`;
+                    headers['Authorization'] = 'Bearer ' + accessToken;
+                    console.log('Debug - Adding Authorization header');
+                } else {
+                    console.log('Debug - No token found in localStorage');
                 }
                 
+                console.log('Debug - Request headers:', JSON.stringify(headers));
+                
                 const response = await fetch(`${API_BASE}/api/approvals?days=7&user_id=${currentUserId}`, {
-                    headers: headers,
-                    credentials: 'include'
+                    method: 'GET',
+                    headers: headers
                 });
+                
+                console.log('Debug - Response status:', response.status);
+                
                 const data = await response.json();
+                console.log('Debug - Response data:', data);
                 
                 if (data.code === 401) {
                     // Token过期
