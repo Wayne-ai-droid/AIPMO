@@ -72,10 +72,19 @@ def get_feishu_approvals(access_token: str, user_id: str, days: int = 7):
         logger.info(f"Params: {params}")
         
         response = requests.get(url, headers=headers, params=params, timeout=10)
-        result = response.json()
         
         logger.info(f"飞书API响应状态码: {response.status_code}")
-        logger.info(f"飞书API响应: {result}")
+        logger.info(f"飞书API响应内容类型: {response.headers.get('content-type')}")
+        logger.info(f"飞书API响应前200字符: {response.text[:200]}")
+        
+        # 检查是否是JSON响应
+        if 'application/json' not in response.headers.get('content-type', ''):
+            logger.error(f"飞书API返回非JSON响应: {response.text[:500]}")
+            return {"error": {"msg": "API返回非JSON格式", "status": response.status_code, "content": response.text[:200]}}
+        
+        result = response.json()
+        
+        logger.info(f"飞书API响应code: {result.get('code')}")
         
         if result.get('code') == 0:
             data = result.get('data', {})
