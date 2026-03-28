@@ -8,13 +8,6 @@ import requests
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# 尝试导入服务
-try:
-    from app.services.feishu_api import get_feishu_api
-    FEISHU_API_AVAILABLE = True
-except ImportError:
-    FEISHU_API_AVAILABLE = False
-
 # 模拟数据（用于测试或API不可用时）
 MOCK_APPROVALS = [
     {
@@ -42,81 +35,47 @@ MOCK_APPROVALS = [
 ]
 
 
-def get_feishu_approvals(access_token: str, user_id: str, days: int = 7):
+def test_feishu_api(access_token: str):
     """
-    调用飞书API获取审批列表
+    测试飞书API连通性
     
-    文档: https://open.feishu.cn/document/server-docs/approval-v4/task/query
-    注意：获取待办任务列表需要使用 /approval/v4/tasks 接口
+    使用 /approval/v4/approvals 获取审批定义列表（最简单的测试接口）
     """
     base_url = "https://open.feishu.cn/open-apis"
-    
-    # 【重要】使用正确的API端点：获取待办任务列表
-    # 文档：https://open.feishu.cn/document/server-docs/approval-v4/task/query
-    url = f"{base_url}/approval/v4/tasks"
+    url = f"{base_url}/approval/v4/approvals"
     
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
     
-    # 查询参数
-    params = {
-        "user_id": user_id,
-        "page_size": 100
-    }
-    
     try:
-        logger.info(f"调用飞书API: {url}")
-        logger.info(f"Headers: Authorization=Bearer {access_token[:20]}...")
-        logger.info(f"Params: {params}")
+        logger.info(f"测试飞书API连通性: {url}")
+        response = requests.get(url, headers=headers, timeout=10)
         
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        logger.info(f"响应状态码: {response.status_code}")
         
-        logger.info(f"飞书API响应状态码: {response.status_code}")
-        logger.info(f"飞书API响应内容类型: {response.headers.get('content-type')}")
-        logger.info(f"飞书API响应前200字符: {response.text[:200]}")
-        
-        # 检查是否是JSON响应
-        if 'application/json' not in response.headers.get('content-type', ''):
-            logger.error(f"飞书API返回非JSON响应: {response.text[:500]}")
-            return {"error": {"msg": "API返回非JSON格式", "status": response.status_code, "content": response.text[:200]}}
-        
-        result = response.json()
-        
-        logger.info(f"飞书API响应code: {result.get('code')}")
-        
-        if result.get('code') == 0:
-            data = result.get('data', {})
-            items = data.get('items', [])
-            
-            # 格式化数据
-            approvals = []
-            for item in items:
-                approval = {
-                    "instance_code": item.get('instance_code'),
-                    "title": item.get('approval_name', '审批申请'),
-                    "form_name": item.get('form_name', '审批'),
-                    "status": item.get('status', 'PENDING'),
-                    "initiator_id": item.get('user_id'),
-                    "initiator_name": item.get('user_name', '未知'),
-                    "create_time": item.get('create_time'),
-                    "update_time": item.get('update_time')
-                }
-                approvals.append(approval)
-            
-            logger.info(f"获取到 {len(approvals)} 条审批")
-            return approvals
+        if response.status_code == 200:
+            try:
+                result = response.json()
+                if result.get('code') == 0:
+                    approval_list = result.get('data', {}).get('approval_list', [])
+                    logger.info(f"API测试成功，获取到 {len(approval_list)} 个审批定义")
+                    return {
+                        "success": True,
+                        "approval_count": len(approval_list),
+                        "approvals": approval_list[:5]  # 只返回前5个
+                    }
+                else:
+                    return {"success": False, "error": result.get('msg'), "code": result.get('code')}
+            except:
+                return {"success": False, "error": "解析响应失败"}
         else:
-            logger.error(f"飞书API调用失败: code={result.get('code')}, msg={result.get('msg')}")
-            # 返回错误信息用于调试
-            return {"error": result}
+            return {"success": False, "error": f"HTTP {response.status_code}", "detail": response.text[:200]}
             
     except Exception as e:
-        logger.error(f"调用飞书API异常: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
+        logger.error(f"API测试异常: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @router.get("/approvals")
@@ -129,8 +88,6 @@ async def get_approvals(
 ):
     """
     获取审批列表
-    
-    如果提供了Authorization header，会尝试调用飞书API获取真实数据
     """
     logger.info(f"获取审批列表: user_id={user_id}, days={days}")
     logger.info(f"Authorization header: {authorization[:30] if authorization else 'None'}...")
@@ -138,34 +95,25 @@ async def get_approvals(
     # 从header中提取token
     access_token = None
     if authorization and authorization.startswith("Bearer "):
-        access_token = authorization[7:]  # 去掉 "Bearer " 前缀
+        access_token = authorization[7:]
     
-    # 如果有access_token，尝试调用飞书API
+    api_test_result = None
+    
+    # 测试飞书API连通性
     if access_token:
-        logger.info(f"尝试调用飞书API... token: {access_token[:20]}...")
-        feishu_result = get_feishu_approvals(access_token, user_id, days)
-        
-        if isinstance(feishu_result, list) and len(feishu_result) > 0:
-            return {
-                "code": 0,
-                "msg": "success",
-                "data": feishu_result,
-                "total": len(feishu_result),
-                "source": "feishu_api"
-            }
-        elif isinstance(feishu_result, dict) and "error" in feishu_result:
-            error_info = feishu_result["error"]
-            logger.error(f"飞书API错误: {error_info}")
+        logger.info("测试飞书API连通性...")
+        api_test_result = test_feishu_api(access_token)
+        logger.info(f"API测试结果: {api_test_result}")
     
-    # 无论是否有token，都返回模拟数据用于测试
-    logger.info("返回模拟数据用于展示")
+    # 目前返回模拟数据，但附带API测试结果
     return {
         "code": 0,
         "msg": "success",
         "data": MOCK_APPROVALS,
         "total": len(MOCK_APPROVALS),
         "source": "mock",
-        "debug": {"has_token": bool(access_token), "user_id": user_id}
+        "api_test": api_test_result,
+        "note": "已获取access_token并测试API连通性。如需真实数据，需进一步完善API调用逻辑。"
     }
 
 
